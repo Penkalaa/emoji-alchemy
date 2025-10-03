@@ -849,38 +849,70 @@
             try {
                 showAlert('Saving to cloud...', 'info', 'exportStatus');
                 
-                const response = await fetch('/netlify/functions/save-levels', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(saveData)
-                });
+                // Try different Netlify function paths
+                const possiblePaths = [
+                    '/.netlify/functions/save-levels',
+                    '/netlify/functions/save-levels',
+                    '/.netlify/functions/save-levels.js'
+                ];
                 
-                const result = await response.json();
+                let success = false;
+                let lastError = null;
                 
-                if (result.success) {
-                    showAlert(`✅ Saved to cloud successfully! ID: ${result.data.id}`, 'success', 'exportStatus');
-                    
-                    // Also save to localStorage for game to access
+                for (const path of possiblePaths) {
                     try {
-                        const localData = result.fullData || saveData;
-                        localStorage.setItem(`levelPack_${localData.id}`, JSON.stringify(localData));
-                        console.log('Level pack saved to localStorage with key:', `levelPack_${localData.id}`);
-                        console.log('Saved data:', localData);
-                    } catch (e) {
-                        console.warn('Failed to save to localStorage:', e);
+                        console.log('Trying path:', path);
+                        const response = await fetch(path, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(saveData)
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            
+                            if (result.success) {
+                                showAlert(`✅ Saved to cloud successfully! ID: ${result.data.id}`, 'success', 'exportStatus');
+                                
+                                // Save to localStorage for game to access
+                                const localData = result.fullData || saveData;
+                                localStorage.setItem(`levelPack_${localData.id}`, JSON.stringify(localData));
+                                console.log('Level pack saved to localStorage with key:', `levelPack_${localData.id}`);
+                                
+                                // Show in JSON output
+                                document.getElementById('jsonOutput').textContent = JSON.stringify(localData, null, 2);
+                                success = true;
+                                break;
+                            }
+                        }
+                    } catch (pathError) {
+                        console.warn(`Path ${path} failed:`, pathError);
+                        lastError = pathError;
                     }
+                }
+                
+                if (!success) {
+                    // Fallback to localStorage only
+                    console.log('Cloud save failed, using localStorage fallback');
+                    localStorage.setItem(`levelPack_${saveData.id}`, JSON.stringify(saveData));
                     
-                    // Also show in JSON output for reference
-                    document.getElementById('jsonOutput').textContent = JSON.stringify(result.fullData, null, 2);
-                } else {
-                    showAlert(`❌ Save failed: ${result.error}`, 'error', 'exportStatus');
+                    showAlert(`💾 Saved locally! (Cloud unavailable) ID: ${saveData.id}`, 'warning', 'exportStatus');
+                    document.getElementById('jsonOutput').textContent = JSON.stringify(saveData, null, 2);
                 }
                 
             } catch (error) {
                 console.error('Save error:', error);
-                showAlert(`❌ Network error: ${error.message}`, 'error', 'exportStatus');
+                
+                // Fallback to localStorage
+                try {
+                    localStorage.setItem(`levelPack_${saveData.id}`, JSON.stringify(saveData));
+                    showAlert(`💾 Saved locally only! ID: ${saveData.id}`, 'warning', 'exportStatus');
+                    document.getElementById('jsonOutput').textContent = JSON.stringify(saveData, null, 2);
+                } catch (localError) {
+                    showAlert(`❌ Save failed completely: ${localError.message}`, 'error', 'exportStatus');
+                }
             }
         }
         
