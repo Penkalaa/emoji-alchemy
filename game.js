@@ -1879,6 +1879,11 @@ class EmojiAlchemyGame {
          adminText.anchor.set(0.5)
          adminText.x = 175
          adminText.y = 370
+         adminText.interactive = true
+         adminText.buttonMode = true
+         adminText.on('pointerdown', () => {
+            window.open('/admin.html', '_blank')
+         })
          this.levelPackPanel.addChild(adminText)
          
          // Add to stage
@@ -2327,7 +2332,7 @@ class EmojiAlchemyGame {
       yPos += 20
       
       // Admin Panel Link
-      const adminBtn = this.createMenuButton('⚙️ Level Editor', 180, yPos, () => {
+      const adminBtn = this.createMenuButton('📝 Level Editor', 180, yPos, () => {
          window.open('/admin.html', '_blank')
       })
       this.settingsPanel.addChild(adminBtn)

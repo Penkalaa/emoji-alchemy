@@ -303,6 +303,9 @@
                 <button class="btn btn-success" onclick="showCreateModal()">
                     ➕ Create New Pack
                 </button>
+                <button class="btn btn-secondary" onclick="showImportModal()">
+                    📥 Import JSON
+                </button>
                 <button class="btn btn-primary" onclick="loadPacks()">
                     🔄 Refresh
                 </button>
@@ -334,6 +337,48 @@
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="hideCreateModal()">Cancel</button>
                 <button class="btn btn-success" onclick="createPack()">Create Pack</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Import JSON Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3>📥 Import JSON Level Pack</h3>
+            
+            <div class="form-group">
+                <label for="importPackName">Pack Name</label>
+                <input type="text" id="importPackName" placeholder="Imported Levels" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="jsonInput">JSON Data</label>
+                <textarea id="jsonInput" rows="12" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-family: monospace; font-size: 14px;" placeholder='Paste your JSON array here:
+[
+  {
+    "level": 1,
+    "inputs": ["🔥", "💧"],
+    "result": "💨",
+    "names": {"a": "fire", "b": "water", "result": "steam"}
+  },
+  {
+    "level": 2,
+    "inputs": ["🌞", "🌧️"],
+    "result": "🌈",
+    "names": {"a": "sun", "b": "rain", "result": "rainbow"}
+  }
+]'></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Or Upload File</label>
+                <input type="file" id="jsonFile" accept=".json" style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px;">
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideImportModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="validateImportJson()">✅ Validate</button>
+                <button class="btn btn-success" onclick="importJsonPack()">📥 Import</button>
             </div>
         </div>
     </div>
@@ -503,6 +548,149 @@
             document.getElementById('createModal').style.display = 'none';
             document.getElementById('packName').value = '';
         }
+        
+        function showImportModal() {
+            document.getElementById('importModal').style.display = 'block';
+            document.getElementById('importPackName').focus();
+        }
+        
+        function hideImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('importPackName').value = '';
+            document.getElementById('jsonInput').value = '';
+            document.getElementById('jsonFile').value = '';
+        }
+        
+        function validateImportJson() {
+            const jsonData = document.getElementById('jsonInput').value.trim();
+            if (!jsonData) {
+                showAlert('Please paste JSON data first', 'error');
+                return;
+            }
+            
+            try {
+                const levels = JSON.parse(jsonData);
+                
+                if (!Array.isArray(levels)) {
+                    throw new Error('JSON must be an array of levels');
+                }
+                
+                // Validate each level
+                levels.forEach((level, index) => {
+                    if (!level.inputs || !Array.isArray(level.inputs) || level.inputs.length !== 2) {
+                        throw new Error(`Level ${index + 1}: Invalid inputs array`);
+                    }
+                    if (!level.result) {
+                        throw new Error(`Level ${index + 1}: Missing result`);
+                    }
+                });
+                
+                showAlert(`✅ Valid JSON! Found ${levels.length} levels`, 'success');
+                
+            } catch (error) {
+                showAlert(`❌ Invalid JSON: ${error.message}`, 'error');
+            }
+        }
+        
+        async function importJsonPack() {
+            const name = document.getElementById('importPackName').value.trim();
+            const jsonData = document.getElementById('jsonInput').value.trim();
+            
+            if (!name) {
+                showAlert('Please enter a pack name', 'error');
+                return;
+            }
+            
+            if (!jsonData) {
+                showAlert('Please paste JSON data', 'error');
+                return;
+            }
+            
+            try {
+                const levels = JSON.parse(jsonData);
+                
+                if (!Array.isArray(levels)) {
+                    throw new Error('JSON must be an array of levels');
+                }
+                
+                // Check for duplicate names
+                if (currentPacks.some(pack => pack.name.toLowerCase() === name.toLowerCase())) {
+                    const timestamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+                    const uniqueName = `${name}-${timestamp}`;
+                    
+                    if (!confirm(`Pack name "${name}" already exists!\n\nUse "${uniqueName}" instead?`)) {
+                        return;
+                    }
+                    
+                    document.getElementById('importPackName').value = uniqueName;
+                    name = uniqueName;
+                }
+                
+                // Create pack
+                const timestamp = new Date().toISOString();
+                const id = timestamp.replace(/[-:.]/g, '').replace('T', '').slice(0, 14);
+                
+                const newPack = {
+                    id: id,
+                    name: name,
+                    timestamp: timestamp,
+                    totalLevels: levels.length,
+                    levels: levels,
+                    filename: `${name.toLowerCase().replace(/\s+/g, '-')}-${id}.json`
+                };
+                
+                // Save to localStorage
+                localStorage.setItem(`levelPack_${id}`, JSON.stringify(newPack));
+                
+                // Try to save to cloud
+                try {
+                    const response = await fetch('/.netlify/functions/save-levels', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newPack)
+                    });
+                    
+                    if (response.ok) {
+                        showAlert(`Imported "${name}" with ${levels.length} levels to cloud and locally!`, 'success');
+                    } else {
+                        showAlert(`Imported "${name}" with ${levels.length} levels locally (cloud unavailable)`, 'success');
+                    }
+                } catch (cloudError) {
+                    showAlert(`Imported "${name}" with ${levels.length} levels locally (cloud unavailable)`, 'success');
+                }
+                
+                hideImportModal();
+                loadPacks();
+                
+            } catch (error) {
+                console.error('Import error:', error);
+                showAlert(`Import failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // File upload handler
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('jsonFile').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file && file.type === 'application/json') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        document.getElementById('jsonInput').value = e.target.result;
+                        
+                        // Auto-set pack name from filename
+                        const fileName = file.name.replace('.json', '');
+                        if (!document.getElementById('importPackName').value) {
+                            document.getElementById('importPackName').value = fileName;
+                        }
+                        
+                        showAlert('File loaded! Click Validate to check format.', 'info');
+                    };
+                    reader.readAsText(file);
+                } else {
+                    showAlert('Please select a valid JSON file', 'error');
+                }
+            });
+        });
         
         async function createPack() {
             const name = document.getElementById('packName').value.trim();
@@ -787,11 +975,14 @@
         window.onclick = function(event) {
             const createModal = document.getElementById('createModal');
             const editModal = document.getElementById('editModal');
+            const importModal = document.getElementById('importModal');
             
             if (event.target === createModal) {
                 hideCreateModal();
             } else if (event.target === editModal) {
                 hideEditModal();
+            } else if (event.target === importModal) {
+                hideImportModal();
             }
         }
         
