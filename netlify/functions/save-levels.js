@@ -1,4 +1,5 @@
 // Netlify Function to save level data
+// Environment variables needed: SUPABASE_URL, SUPABASE_ANON_KEY
 exports.handler = async (event, context) => {
   // Enable CORS
   const headers = {
@@ -63,19 +64,55 @@ exports.handler = async (event, context) => {
       }
     };
 
-    // In a real implementation, you would save this to a database
-    // For now, we'll just return the data with a success message
-    // You can integrate with services like:
-    // - Netlify Forms
-    // - Airtable
-    // - Firebase
-    // - Supabase
-    // - FaunaDB
-
-    console.log('Level data saved:', {
+    // Save to cloud storage (Supabase or similar)
+    let cloudSaveSuccess = false;
+    
+    try {
+      // Try to save to Supabase if environment variables are available
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseKey) {
+        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            id: timestampShort,
+            name: data.name,
+            filename: filename,
+            timestamp: timestamp,
+            total_levels: data.levels.length,
+            level_data: savedData,
+            created_at: timestamp,
+            ip_address: event.headers['x-forwarded-for'] || event.headers['client-ip']
+          })
+        });
+        
+        if (supabaseResponse.ok) {
+          cloudSaveSuccess = true;
+          console.log('Level pack saved to Supabase successfully');
+        } else {
+          console.warn('Supabase save failed:', await supabaseResponse.text());
+        }
+      } else {
+        console.log('Supabase credentials not configured, skipping cloud save');
+      }
+    } catch (cloudError) {
+      console.warn('Cloud save failed:', cloudError);
+    }
+    
+    // Always log the save attempt
+    console.log('Level data save attempt:', {
+      id: timestampShort,
       filename,
       totalLevels: data.levels.length,
-      timestamp
+      timestamp,
+      cloudSaved: cloudSaveSuccess
     });
 
     return {

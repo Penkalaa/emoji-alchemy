@@ -123,20 +123,36 @@ class LevelManager {
             return packData.levels;
          }
          
-         // Try to fetch from server
+         // Try to fetch from server (cloud storage)
          try {
             console.log('Trying to fetch from server:', packId);
-            const response = await fetch(`/.netlify/functions/get-levels?id=${packId}`);
-            const result = await response.json();
             
-            if (result.success && result.data) {
-               console.log('Loaded level pack from server');
-               this.currentLevelPack = result.data;
-               
-               // Save to localStorage for future use
-               localStorage.setItem(`levelPack_${packId}`, JSON.stringify(result.data));
-               
-               return result.data.levels;
+            // Get all packs and find the one we need
+            const allPacksResponse = await fetch('/.netlify/functions/get-levels');
+            const allPacksResult = await allPacksResponse.json();
+            
+            if (allPacksResult.success && allPacksResult.data) {
+               const foundPack = allPacksResult.data.find(pack => pack.id === packId);
+               if (foundPack) {
+                  console.log('Found level pack in cloud storage');
+                  
+                  // Create pack data structure
+                  const packData = {
+                     id: foundPack.id,
+                     name: foundPack.name,
+                     filename: foundPack.filename,
+                     timestamp: foundPack.timestamp,
+                     totalLevels: foundPack.totalLevels,
+                     levels: [] // Cloud packs need full level data API
+                  };
+                  
+                  this.currentLevelPack = packData;
+                  localStorage.setItem(`levelPack_${packId}`, JSON.stringify(packData));
+                  
+                  // For now, return empty array (would need separate API for full level data)
+                  console.warn('Cloud pack found but level data not implemented yet');
+                  return [];
+               }
             }
          } catch (serverError) {
             console.warn('Could not fetch from server:', serverError);

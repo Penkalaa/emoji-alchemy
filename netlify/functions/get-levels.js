@@ -26,22 +26,64 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // In a real implementation, you would fetch from a database
-    // For now, we return empty array since level packs are stored in localStorage
+    let levelPacks = [];
+    let cloudFetchSuccess = false;
     
-    // This would normally query a database and return saved level packs
-    // Currently, all level packs are managed via localStorage in the client
-    const savedLevels = [];
+    // Try to fetch from Supabase if environment variables are available
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    
+    if (supabaseUrl && supabaseKey) {
+      try {
+        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs?select=id,name,filename,timestamp,total_levels,created_at&order=created_at.desc&limit=20`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+        
+        if (supabaseResponse.ok) {
+          const supabaseData = await supabaseResponse.json();
+          
+          // Transform Supabase data to our format
+          levelPacks = supabaseData.map(pack => ({
+            id: pack.id,
+            filename: pack.filename,
+            name: pack.name,
+            timestamp: pack.timestamp,
+            totalLevels: pack.total_levels,
+            preview: [`📦 ${pack.name}`, `🎮 ${pack.total_levels} levels`, `📅 ${new Date(pack.created_at).toLocaleDateString()}`],
+            source: 'cloud'
+          }));
+          
+          cloudFetchSuccess = true;
+          console.log(`Fetched ${levelPacks.length} level packs from Supabase`);
+        } else {
+          console.warn('Supabase fetch failed:', await supabaseResponse.text());
+        }
+      } catch (fetchError) {
+        console.warn('Cloud fetch error:', fetchError);
+      }
+    } else {
+      console.log('Supabase credentials not configured, returning empty array');
+    }
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        message: 'No server-side level packs found. Using localStorage for level management.',
-        data: savedLevels,
-        total: savedLevels.length,
-        note: 'Level packs are currently stored in localStorage. In production, this would fetch from a real database.'
+        message: cloudFetchSuccess ? 
+          `Found ${levelPacks.length} level packs from cloud storage.` : 
+          'Cloud storage not configured or unavailable. Using localStorage for level management.',
+        data: levelPacks,
+        total: levelPacks.length,
+        cloudEnabled: cloudFetchSuccess,
+        note: cloudFetchSuccess ? 
+          'Level packs loaded from cloud storage (Supabase).' : 
+          'Level packs are stored in localStorage. Configure SUPABASE_URL and SUPABASE_ANON_KEY for cloud storage.'
       })
     };
 
