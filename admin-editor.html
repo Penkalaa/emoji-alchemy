@@ -418,6 +418,17 @@
                 <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">📁 Load File</button>
             </div>
             
+            <!-- Quick Actions after import -->
+            <div class="input-group" style="margin-top: 15px; display: none;" id="quickActions">
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Pack Name</label>
+                    <input type="text" id="quickExportName" placeholder="my-levels" value="">
+                </div>
+                <button class="btn btn-primary" onclick="quickSaveToCloud()" style="background: #00ad9f;">☁️ Save to Cloud</button>
+                <button class="btn btn-secondary" onclick="quickDownload()">💾 Download</button>
+                <button class="btn btn-warning" onclick="hideQuickActions()">✕ Cancel</button>
+            </div>
+            
             <div id="bulkStatus"></div>
         </div>
         
@@ -444,6 +455,16 @@
                 <button class="btn btn-danger" onclick="clearAllLevels()">🗑️ Clear All Levels</button>
                 <button class="btn btn-secondary" onclick="loadDefaultLevels()">🔄 Load Default Levels</button>
                 <button class="btn btn-success" onclick="refreshLevelsList()">🔄 Refresh List</button>
+            </div>
+            
+            <!-- Quick Save Actions -->
+            <div class="input-group" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>Save Current Levels</label>
+                    <input type="text" id="manageSaveName" placeholder="my-levels" value="">
+                </div>
+                <button class="btn btn-primary" onclick="quickSaveFromManage()" style="background: #00ad9f;">☁️ Save to Cloud</button>
+                <button class="btn btn-secondary" onclick="quickDownloadFromManage()">💾 Download</button>
             </div>
             
             <div class="levels-list" id="levelsList">
@@ -638,8 +659,13 @@
                 
                 currentLevels.sort((a, b) => a.level - b.level);
                 
-                showAlert(`Successfully imported ${levels.length} levels!`, 'success', 'bulkStatus');
+                showAlert(`✅ Successfully imported ${levels.length} levels! Use quick actions below to save.`, 'success', 'bulkStatus');
                 updateStats();
+                
+                // Show quick actions and set default name
+                showQuickActions();
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+                document.getElementById('quickExportName').value = `imported-levels-${timestamp}`;
                 
             } catch (error) {
                 showAlert(`JSON Error: ${error.message}`, 'error', 'bulkStatus');
@@ -1004,6 +1030,54 @@
                 }, 5000);
             }
         }
+        
+        // Quick Actions Functions
+        function showQuickActions() {
+            document.getElementById('quickActions').style.display = 'block';
+        }
+        
+        function hideQuickActions() {
+            document.getElementById('quickActions').style.display = 'none';
+        }
+        
+        function quickSaveToCloud() {
+            const name = document.getElementById('quickExportName').value.trim() || 'levels';
+            document.getElementById('exportName').value = name;
+            saveToNetlify();
+            hideQuickActions();
+        }
+        
+        function quickDownload() {
+            const name = document.getElementById('quickExportName').value.trim() || 'levels';
+            document.getElementById('exportName').value = name;
+            downloadLevels();
+            hideQuickActions();
+        }
+        
+        function quickSaveFromManage() {
+            const name = document.getElementById('manageSaveName').value.trim() || 'levels';
+            document.getElementById('exportName').value = name;
+            saveToNetlify();
+        }
+        
+        function quickDownloadFromManage() {
+            const name = document.getElementById('manageSaveName').value.trim() || 'levels';
+            document.getElementById('exportName').value = name;
+            downloadLevels();
+        }
+        
+        // Set default names on page load
+        function setDefaultNames() {
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+            document.getElementById('manageSaveName').value = `my-levels-${timestamp}`;
+        }
+        
+        // Update the window.onload to include default names
+        const originalOnLoad = window.onload;
+        window.onload = function() {
+            if (originalOnLoad) originalOnLoad();
+            setDefaultNames();
+        };
     </script>
 </body>
 </html>

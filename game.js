@@ -621,6 +621,15 @@ class GameDataManager {
          totalScore: 0,
          unlockedLevels: 1,
          completedLevels: [],
+         currentLevelPack: 'default',
+         levelPackProgress: {
+            'default': {
+               currentLevel: 0,
+               completedLevels: [],
+               highScore: 0,
+               totalScore: 0
+            }
+         },
          settings: {
             soundEnabled: true,
             musicEnabled: true,
@@ -730,6 +739,24 @@ class EmojiAlchemyGame {
          // Initialize GAME_DATA with default levels
          if (!GAME_DATA.levels || GAME_DATA.levels.length === 0) {
             GAME_DATA.levels = this.levelManager.getDefaultLevels()
+         }
+         
+         // Check if user has a current level pack, if so load it directly
+         const currentPack = this.gameData.currentLevelPack
+         if (currentPack && currentPack !== 'default') {
+            // Try to load the saved pack directly
+            try {
+               const levels = await this.levelManager.loadLevelPack(currentPack)
+               if (levels && levels.length > 0) {
+                  GAME_DATA.levels = levels
+                  this.loadPackProgress(currentPack)
+                  this.loadLevel(this.currentLevel)
+                  console.log(`Auto-loaded saved pack: ${currentPack}`)
+                  return
+               }
+            } catch (error) {
+               console.warn('Failed to auto-load saved pack, showing selector')
+            }
          }
          
          // Load available level packs and show selector
@@ -1765,8 +1792,14 @@ class EmojiAlchemyGame {
          
          let yPos = 90
          
+         // Get progress for default pack
+         const defaultProgress = this.gameData.levelPackProgress?.['default']
+         const defaultProgressText = defaultProgress ? 
+            `Level ${defaultProgress.currentLevel + 1}/${this.levelManager.getDefaultLevels().length} • Score: ${defaultProgress.totalScore}` :
+            '50 built-in levels'
+            
          // Default levels button
-         const defaultButton = this.createPackButton('Default Levels', '50 built-in levels', 175, yPos, () => {
+         const defaultButton = this.createPackButton('Default Levels', defaultProgressText, 175, yPos, () => {
             this.selectLevelPack('default')
          })
          this.levelPackPanel.addChild(defaultButton)
@@ -1776,9 +1809,15 @@ class EmojiAlchemyGame {
          if (availablePacks.length > 0) {
             availablePacks.forEach((pack, index) => {
                if (yPos < 350) { // Don't overflow panel
+                  // Get progress for this pack
+                  const packProgress = this.gameData.levelPackProgress?.[pack.id]
+                  const progressText = packProgress ? 
+                     `Level ${packProgress.currentLevel + 1}/${pack.totalLevels} • Score: ${packProgress.totalScore}` :
+                     `${pack.totalLevels} levels - ${new Date(pack.timestamp).toLocaleDateString()}`
+                     
                   const packButton = this.createPackButton(
                      pack.name, 
-                     `${pack.totalLevels} levels - ${new Date(pack.timestamp).toLocaleDateString()}`,
+                     progressText,
                      175, 
                      yPos, 
                      () => this.selectLevelPack(pack.id)
@@ -1909,6 +1948,9 @@ class EmojiAlchemyGame {
       try {
          console.log(`Selected level pack: ${packId}`)
          
+         // Save current pack progress before switching
+         this.saveCurrentPackProgress()
+         
          // Hide selector
          this.hideLevelPackSelector()
          
@@ -1927,14 +1969,16 @@ class EmojiAlchemyGame {
          
          console.log(`Loaded ${GAME_DATA.levels.length} levels`)
          
-         // Reset game state
-         this.currentLevel = 0
-         this.score = 0
+         // Update current level pack
+         this.gameData.currentLevelPack = packId
          
-         // Start game
+         // Load progress for this pack
+         this.loadPackProgress(packId)
+         
+         // Start game from saved progress
          this.loadLevel(this.currentLevel)
          
-         this.showQuickFeedback(`Loaded ${GAME_DATA.levels.length} levels!`, 0x27ae60)
+         this.showQuickFeedback(`Loaded ${GAME_DATA.levels.length} levels! Resumed from level ${this.currentLevel + 1}`, 0x27ae60)
          
       } catch (error) {
          console.error('Error selecting level pack:', error)
@@ -2288,6 +2332,77 @@ class EmojiAlchemyGame {
          this.app.stage.removeChild(this.settingsPanel)
          if (this.settingsPanel.destroy) this.settingsPanel.destroy()
          this.settingsPanel = null
+      }
+   }
+   
+   saveCurrentPackProgress() {
+      const currentPack = this.gameData.currentLevelPack || 'default'
+      
+      // Initialize pack progress if it doesn't exist
+      if (!this.gameData.levelPackProgress) {
+         this.gameData.levelPackProgress = {}
+      }
+      
+      if (!this.gameData.levelPackProgress[currentPack]) {
+         this.gameData.levelPackProgress[currentPack] = {
+            currentLevel: 0,
+            completedLevels: [],
+            highScore: 0,
+            totalScore: 0
+         }
+      }
+      
+      // Save current progress
+      this.gameData.levelPackProgress[currentPack] = {
+         currentLevel: this.currentLevel,
+         completedLevels: [...this.gameData.completedLevels],
+         highScore: Math.max(this.gameData.levelPackProgress[currentPack].highScore || 0, this.score),
+         totalScore: this.score
+      }
+      
+      console.log(`Saved progress for pack ${currentPack}:`, this.gameData.levelPackProgress[currentPack])
+      this.saveGameData()
+   }
+   
+   loadPackProgress(packId) {
+      // Initialize pack progress if it doesn't exist
+      if (!this.gameData.levelPackProgress) {
+         this.gameData.levelPackProgress = {}
+      }
+      
+      if (!this.gameData.levelPackProgress[packId]) {
+         this.gameData.levelPackProgress[packId] = {
+            currentLevel: 0,
+            completedLevels: [],
+            highScore: 0,
+            totalScore: 0
+         }
+      }
+      
+      // Load progress for this pack
+      const packProgress = this.gameData.levelPackProgress[packId]
+      this.currentLevel = packProgress.currentLevel || 0
+      this.score = packProgress.totalScore || 0
+      this.gameData.completedLevels = [...(packProgress.completedLevels || [])]
+      
+      // Update UI
+      this.updateScoreDisplay()
+      
+      console.log(`Loaded progress for pack ${packId}:`, packProgress)
+   }
+   
+   updateScoreDisplay() {
+      if (this.scoreText) {
+         this.scoreText.text = `Score: ${this.score}`
+      }
+      
+      // Update high score for current pack
+      const currentPack = this.gameData.currentLevelPack || 'default'
+      const packProgress = this.gameData.levelPackProgress?.[currentPack]
+      const packHighScore = packProgress?.highScore || 0
+      
+      if (this.highScoreText) {
+         this.highScoreText.text = `High Score: ${packHighScore}`
       }
    }
 }
