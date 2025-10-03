@@ -872,6 +872,13 @@
             }
             
             const exportName = document.getElementById('exportName').value.trim() || 'levels';
+            
+            // Check for duplicate names first
+            if (await checkDuplicateName(exportName)) {
+                showAlert(`❌ Pack name "${exportName}" already exists! Please choose a different name.`, 'error', 'exportStatus');
+                return;
+            }
+            
             const timestamp = new Date().toISOString();
             const id = timestamp.replace(/[-:.]/g, '').replace('T', '').slice(0, 14); // YYYYMMDDHHMMSS format
             
@@ -884,6 +891,15 @@
                 levels: currentLevels,
                 filename: `${exportName}-${id}.json`
             };
+            
+            // Disable save button and show loading
+            const saveButtons = document.querySelectorAll('button[onclick*="saveToNetlify"], button[onclick*="saveFromBulk"], button[onclick*="saveFromManage"]');
+            const originalTexts = [];
+            saveButtons.forEach((btn, index) => {
+                originalTexts[index] = btn.innerHTML;
+                btn.innerHTML = '⏳ Saving...';
+                btn.disabled = true;
+            });
             
             try {
                 showAlert('Saving to cloud...', 'info', 'exportStatus');
@@ -952,6 +968,12 @@
                 } catch (localError) {
                     showAlert(`❌ Save failed completely: ${localError.message}`, 'error', 'exportStatus');
                 }
+            } finally {
+                // Restore save buttons
+                saveButtons.forEach((btn, index) => {
+                    btn.innerHTML = originalTexts[index];
+                    btn.disabled = false;
+                });
             }
         }
         
@@ -1067,9 +1089,23 @@
             hideQuickActions();
         }
         
-        function quickSaveFromManage() {
+        async function quickSaveFromManage() {
             const name = document.getElementById('manageSaveName').value.trim() || 'levels';
-            document.getElementById('exportName').value = name;
+            
+            // Check for duplicates
+            if (await checkDuplicateName(name)) {
+                const uniqueName = generateUniqueName(name);
+                const proceed = confirm(`Pack name "${name}" already exists!\n\nUse "${uniqueName}" instead?`);
+                if (proceed) {
+                    document.getElementById('manageSaveName').value = uniqueName;
+                    document.getElementById('exportName').value = uniqueName;
+                } else {
+                    return;
+                }
+            } else {
+                document.getElementById('exportName').value = name;
+            }
+            
             saveToNetlify();
         }
         
@@ -1093,6 +1129,54 @@
             updateBulkLevelCount();
         };
         
+        // Check for duplicate pack names
+        async function checkDuplicateName(name) {
+            try {
+                // Check localStorage first
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('levelPack_')) {
+                        const packData = JSON.parse(localStorage.getItem(key));
+                        if (packData.name && packData.name.toLowerCase() === name.toLowerCase()) {
+                            return true;
+                        }
+                    }
+                }
+                
+                // Check cloud storage
+                const response = await fetch('/.netlify/functions/get-levels');
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data) {
+                        const duplicate = result.data.find(pack => 
+                            pack.name && pack.name.toLowerCase() === name.toLowerCase()
+                        );
+                        return !!duplicate;
+                    }
+                }
+                
+                return false;
+            } catch (error) {
+                console.warn('Error checking duplicate names:', error);
+                return false; // Allow save if check fails
+            }
+        }
+        
+        // Generate unique name suggestion
+        function generateUniqueName(baseName) {
+            let counter = 1;
+            let newName = baseName;
+            
+            // Simple counter-based uniqueness (could be improved)
+            while (counter < 100) {
+                const timestamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+                newName = `${baseName}-${timestamp}`;
+                break; // For now, just add timestamp
+            }
+            
+            return newName;
+        }
+        
         // New Bulk Save Functions
         function updateBulkLevelCount() {
             const count = currentLevels.length;
@@ -1103,9 +1187,24 @@
             }
         }
         
-        function saveFromBulk() {
+        async function saveFromBulk() {
             const name = document.getElementById('bulkSaveName').value.trim() || 'levels';
-            document.getElementById('exportName').value = name;
+            
+            // Check for duplicates
+            if (await checkDuplicateName(name)) {
+                const uniqueName = generateUniqueName(name);
+                const proceed = confirm(`Pack name "${name}" already exists!\n\nUse "${uniqueName}" instead?`);
+                if (proceed) {
+                    document.getElementById('bulkSaveName').value = uniqueName;
+                    document.getElementById('exportName').value = uniqueName;
+                } else {
+                    showAlert('Please choose a different name and try again.', 'warning', 'bulkStatus');
+                    return;
+                }
+            } else {
+                document.getElementById('exportName').value = name;
+            }
+            
             saveToNetlify();
         }
         
