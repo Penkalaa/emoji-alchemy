@@ -52,7 +52,13 @@ exports.handler = async (event, context) => {
     
     if (supabaseUrl && supabaseKey) {
       try {
-        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs?id=eq.${packId}`, {
+        console.log('Attempting Supabase delete for pack:', packId);
+        console.log('Supabase URL:', supabaseUrl);
+        
+        const deleteUrl = `${supabaseUrl}/rest/v1/level_packs?id=eq.${packId}`;
+        console.log('Delete URL:', deleteUrl);
+        
+        const supabaseResponse = await fetch(deleteUrl, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
@@ -62,18 +68,22 @@ exports.handler = async (event, context) => {
           }
         });
         
+        console.log('Supabase response status:', supabaseResponse.status);
+        
         if (supabaseResponse.ok) {
           cloudDeleteSuccess = true;
           console.log('Level pack deleted from Supabase successfully');
         } else {
           const errorText = await supabaseResponse.text();
-          console.warn('Supabase delete failed:', errorText);
+          console.warn('Supabase delete failed:', supabaseResponse.status, errorText);
         }
       } catch (supabaseError) {
         console.warn('Supabase delete error:', supabaseError);
       }
     } else {
       console.log('Supabase credentials not configured, skipping cloud delete');
+      console.log('SUPABASE_URL exists:', !!supabaseUrl);
+      console.log('SUPABASE_ANON_KEY exists:', !!supabaseKey);
     }
 
     // Return success response

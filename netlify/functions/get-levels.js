@@ -35,7 +35,7 @@ exports.handler = async (event, context) => {
     
     if (supabaseUrl && supabaseKey) {
       try {
-        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs?select=id,name,filename,timestamp,total_levels,created_at&order=created_at.desc&limit=20`, {
+        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs?select=id,name,filename,timestamp,total_levels,created_at,level_data&order=created_at.desc&limit=20`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -54,6 +54,7 @@ exports.handler = async (event, context) => {
             name: pack.name,
             timestamp: pack.timestamp,
             totalLevels: pack.total_levels,
+            levels: pack.level_data ? pack.level_data.levels : [], // Extract levels from level_data
             preview: [`📦 ${pack.name}`, `🎮 ${pack.total_levels} levels`, `📅 ${new Date(pack.created_at).toLocaleDateString()}`],
             source: 'cloud'
           }));

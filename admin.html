@@ -446,6 +446,14 @@
                     const result = await response.json();
                     if (result.success) {
                         cloudPacks = result.data || [];
+                        
+                        // Save cloud packs to localStorage for editing
+                        cloudPacks.forEach(pack => {
+                            if (pack.levels && pack.levels.length > 0) {
+                                localStorage.setItem(`levelPack_${pack.id}`, JSON.stringify(pack));
+                                console.log(`Synced cloud pack to localStorage: ${pack.name}`);
+                            }
+                        });
                     }
                 } catch (error) {
                     console.warn('Could not load from cloud:', error);
