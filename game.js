@@ -1785,16 +1785,28 @@ class EmojiAlchemyGame {
          this.levelPackOverlay.endFill()
          this.levelPackOverlay.eventMode = 'static'
          
-         // Create selector panel
+         // Create selector panel with scrolling
          this.levelPackPanel = new PIXI.Graphics()
          this.levelPackPanel.beginFill(0x2c3e50, 0.95)
          this.levelPackPanel.lineStyle(3, 0x3498db)
-         this.levelPackPanel.drawRoundedRect(0, 0, 350, 400, 15)
+         this.levelPackPanel.drawRoundedRect(0, 0, 350, Math.min(500, this.gameHeight - 100), 15)
          this.levelPackPanel.endFill()
          this.levelPackPanel.x = (this.gameWidth - 350) / 2
-         this.levelPackPanel.y = (this.gameHeight - 400) / 2
+         this.levelPackPanel.y = (this.gameHeight - Math.min(500, this.gameHeight - 100)) / 2
          
-         // Title
+         // Create scrollable content container
+         this.levelPackContent = new PIXI.Container()
+         this.levelPackPanel.addChild(this.levelPackContent)
+         
+         // Create mask for scrolling
+         const mask = new PIXI.Graphics()
+         mask.beginFill(0xffffff)
+         mask.drawRoundedRect(10, 10, 330, Math.min(480, this.gameHeight - 120), 10)
+         mask.endFill()
+         this.levelPackContent.mask = mask
+         this.levelPackPanel.addChild(mask)
+         
+         // Title (fixed position, not scrollable)
          const title = new PIXI.Text('Select Level Pack', {
             fontFamily: 'Arial',
             fontSize: 24,
@@ -1806,7 +1818,7 @@ class EmojiAlchemyGame {
          title.y = 40
          this.levelPackPanel.addChild(title)
          
-         let yPos = 90
+         let yPos = 70 // Start from top of scrollable area
          
          // Get progress for default pack
          const defaultProgress = this.gameData.levelPackProgress?.['default']
@@ -1814,37 +1826,35 @@ class EmojiAlchemyGame {
             `Level ${defaultProgress.currentLevel + 1}/${this.levelManager.getDefaultLevels().length} • Score: ${defaultProgress.totalScore}` :
             '50 built-in levels'
             
-         // Default levels button
+         // Default levels button (add to scrollable content)
          const defaultButton = this.createPackButton('Default Levels', defaultProgressText, 175, yPos, () => {
             this.selectLevelPack('default')
          })
-         this.levelPackPanel.addChild(defaultButton)
+         this.levelPackContent.addChild(defaultButton)
          yPos += 70
          
-         // Available packs
+         // Available packs (all packs, scrollable)
          if (availablePacks.length > 0) {
             availablePacks.forEach((pack, index) => {
-               if (yPos < 350) { // Don't overflow panel
-                  // Get progress for this pack
-                  const packProgress = this.gameData.levelPackProgress?.[pack.id]
-                  const progressText = packProgress ? 
-                     `Level ${packProgress.currentLevel + 1}/${pack.totalLevels} • Score: ${packProgress.totalScore}` :
-                     `${pack.totalLevels} levels - ${new Date(pack.timestamp).toLocaleDateString()}`
-                     
-                  const packButton = this.createPackButton(
-                     pack.name, 
-                     progressText,
-                     175, 
-                     yPos, 
-                     () => this.selectLevelPack(pack.id)
-                  )
-                  this.levelPackPanel.addChild(packButton)
-                  yPos += 70
-               }
+               // Get progress for this pack
+               const packProgress = this.gameData.levelPackProgress?.[pack.id]
+               const progressText = packProgress ? 
+                  `Level ${packProgress.currentLevel + 1}/${pack.totalLevels} • Score: ${packProgress.totalScore}` :
+                  `${pack.totalLevels} levels - ${new Date(pack.timestamp).toLocaleDateString()}`
+                  
+               const packButton = this.createPackButton(
+                  pack.name, 
+                  progressText,
+                  175, 
+                  yPos, 
+                  () => this.selectLevelPack(pack.id)
+               )
+               this.levelPackContent.addChild(packButton)
+               yPos += 70
             })
          } else {
             // No packs available message
-            const noPacksText = new PIXI.Text('No custom level packs found.\nUsing default levels.', {
+            const noPacksText = new PIXI.Text('No custom level packs found.\nCreate some in the admin editor!', {
                fontFamily: 'Arial',
                fontSize: 14,
                fill: 0xbdc3c7,
@@ -1853,8 +1863,11 @@ class EmojiAlchemyGame {
             noPacksText.anchor.set(0.5)
             noPacksText.x = 175
             noPacksText.y = yPos + 20
-            this.levelPackPanel.addChild(noPacksText)
+            this.levelPackContent.addChild(noPacksText)
          }
+         
+         // Add scroll functionality
+         this.setupLevelPackScroll(yPos)
          
          // Admin panel link
          const adminText = new PIXI.Text('Create levels at /admin-editor', {
@@ -2002,6 +2015,80 @@ class EmojiAlchemyGame {
       }
    }
    
+   setupLevelPackScroll(contentHeight) {
+      if (!this.levelPackContent) return
+      
+      const maxHeight = Math.min(400, this.gameHeight - 200)
+      const scrollableHeight = contentHeight - 70 // Account for title space
+      
+      if (scrollableHeight <= maxHeight) {
+         // No scrolling needed
+         return
+      }
+      
+      let scrollY = 0
+      const maxScroll = scrollableHeight - maxHeight
+      
+      // Add scroll indicators
+      const scrollIndicator = new PIXI.Text('↕️ Scroll to see more packs', {
+         fontFamily: 'Arial',
+         fontSize: 11,
+         fill: 0x95a5a6,
+         align: 'center'
+      })
+      scrollIndicator.anchor.set(0.5)
+      scrollIndicator.x = 175
+      scrollIndicator.y = Math.min(440, this.gameHeight - 160)
+      this.levelPackPanel.addChild(scrollIndicator)
+      
+      // Mouse wheel scrolling
+      this.levelPackPanel.eventMode = 'static'
+      this.levelPackPanel.on('wheel', (event) => {
+         event.preventDefault()
+         
+         const delta = event.deltaY > 0 ? 30 : -30
+         scrollY = Math.max(0, Math.min(maxScroll, scrollY + delta))
+         
+         this.levelPackContent.y = -scrollY + 70 // Offset for title
+         
+         // Update scroll indicator
+         if (scrollY > 0 && scrollY < maxScroll) {
+            scrollIndicator.text = '↕️ Keep scrolling'
+         } else if (scrollY >= maxScroll) {
+            scrollIndicator.text = '⬆️ Scroll up'
+         } else {
+            scrollIndicator.text = '⬇️ Scroll down'
+         }
+      })
+      
+      // Touch scrolling for mobile
+      let startY = 0
+      let isDragging = false
+      
+      this.levelPackPanel.on('pointerdown', (event) => {
+         startY = event.data.global.y
+         isDragging = true
+      })
+      
+      this.levelPackPanel.on('pointermove', (event) => {
+         if (!isDragging) return
+         
+         const deltaY = event.data.global.y - startY
+         scrollY = Math.max(0, Math.min(maxScroll, scrollY - deltaY))
+         
+         this.levelPackContent.y = -scrollY + 70
+         startY = event.data.global.y
+      })
+      
+      this.levelPackPanel.on('pointerup', () => {
+         isDragging = false
+      })
+      
+      this.levelPackPanel.on('pointerupoutside', () => {
+         isDragging = false
+      })
+   }
+
    hideLevelPackSelector() {
       if (this.levelPackOverlay && this.levelPackOverlay.parent) {
          this.app.stage.removeChild(this.levelPackOverlay)
@@ -2013,6 +2100,11 @@ class EmojiAlchemyGame {
          this.app.stage.removeChild(this.levelPackPanel)
          if (this.levelPackPanel.destroy) this.levelPackPanel.destroy()
          this.levelPackPanel = null
+      }
+      
+      // Clean up scroll content
+      if (this.levelPackContent) {
+         this.levelPackContent = null
       }
    }
    
