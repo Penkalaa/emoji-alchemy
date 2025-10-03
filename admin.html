@@ -608,6 +608,9 @@
                     filename: `${name.toLowerCase().replace(/\s+/g, '-')}-${id}.json`
                 };
                 
+                console.log('Import: Creating new pack with ID:', id);
+                console.log('Import: Pack data:', newPack);
+                
                 // Save to cloud only
                 const response = await fetch('/.netlify/functions/save-levels', {
                     method: 'POST',
