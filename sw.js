@@ -1,9 +1,9 @@
 const CACHE_NAME = 'emoji-alchemy-v1';
 const urlsToCache = [
   '/',
-  '/index.html',
-  '/game.js',
-  '/manifest.json',
+  './index.html',
+  './game.js',
+  './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js'
 ];
 

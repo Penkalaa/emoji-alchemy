@@ -1,0 +1,10 @@
+# Netlify redirects for PWA
+/*    /index.html   200
+
+# Service Worker
+/sw.js    /sw.js    200
+  Service-Worker-Allowed: /
+
+# Manifest
+/manifest.json    /manifest.json    200
+  Content-Type: application/manifest+json

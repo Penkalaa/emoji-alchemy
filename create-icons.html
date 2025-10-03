@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+</head>
+<body>
+    <canvas id="canvas192" width="192" height="192" style="border: 1px solid #ccc; margin: 10px;"></canvas>
+    <canvas id="canvas512" width="512" height="512" style="border: 1px solid #ccc; margin: 10px;"></canvas>
+    
+    <script>
+        // Create 192x192 icon
+        const canvas192 = document.getElementById('canvas192');
+        const ctx192 = canvas192.getContext('2d');
+        
+        // Gradient background
+        const gradient192 = ctx192.createLinearGradient(0, 0, 192, 192);
+        gradient192.addColorStop(0, '#667eea');
+        gradient192.addColorStop(1, '#764ba2');
+        
+        ctx192.fillStyle = gradient192;
+        ctx192.fillRect(0, 0, 192, 192);
+        
+        // Add emojis
+        ctx192.font = '60px Arial';
+        ctx192.textAlign = 'center';
+        ctx192.fillText('🔥', 60, 100);
+        ctx192.fillText('💧', 132, 100);
+        ctx192.fillText('💨', 96, 160);
+        
+        // Create 512x512 icon
+        const canvas512 = document.getElementById('canvas512');
+        const ctx512 = canvas512.getContext('2d');
+        
+        // Gradient background
+        const gradient512 = ctx512.createLinearGradient(0, 0, 512, 512);
+        gradient512.addColorStop(0, '#667eea');
+        gradient512.addColorStop(1, '#764ba2');
+        
+        ctx512.fillStyle = gradient512;
+        ctx512.fillRect(0, 0, 512, 512);
+        
+        // Add emojis
+        ctx512.font = '120px Arial';
+        ctx512.textAlign = 'center';
+        ctx512.fillText('🔥', 180, 280);
+        ctx512.fillText('💧', 332, 280);
+        ctx512.fillText('💨', 256, 400);
+        
+        // Download links
+        setTimeout(() => {
+            // 192x192
+            const link192 = document.createElement('a');
+            link192.download = 'icon-192.png';
+            link192.href = canvas192.toDataURL();
+            link192.textContent = 'Download 192x192 Icon';
+            link192.style.display = 'block';
+            link192.style.margin = '10px';
+            document.body.appendChild(link192);
+            
+            // 512x512
+            const link512 = document.createElement('a');
+            link512.download = 'icon-512.png';
+            link512.href = canvas512.toDataURL();
+            link512.textContent = 'Download 512x512 Icon';
+            link512.style.display = 'block';
+            link512.style.margin = '10px';
+            document.body.appendChild(link512);
+        }, 1000);
+    </script>
+</body>
+</html>
