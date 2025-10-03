@@ -1,6 +1,7 @@
 [build]
   publish = "."
   command = "echo 'No build needed - static files'"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "18"

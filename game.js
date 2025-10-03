@@ -1,6 +1,163 @@
-// Game data from the provided levels
-const GAME_DATA = {
-   levels: [
+// Dynamic Level Manager
+class LevelManager {
+   constructor() {
+      this.currentLevelPack = null;
+      this.availablePacks = [];
+      this.defaultLevels = this.getDefaultLevels();
+   }
+   
+   async loadAvailablePacks() {
+      try {
+         // First, check localStorage for saved level packs
+         const localPacks = this.getLocalLevelPacks();
+         
+         // Then try to fetch from server
+         let serverPacks = [];
+         try {
+            const response = await fetch('/netlify/functions/get-levels');
+            const result = await response.json();
+            
+            if (result.success) {
+               serverPacks = result.data;
+            }
+         } catch (error) {
+            console.warn('Could not fetch server level packs:', error);
+         }
+         
+         // Combine local and server packs (prioritize local)
+         const allPacks = [...localPacks, ...serverPacks];
+         
+         // Remove duplicates based on ID
+         const uniquePacks = allPacks.filter((pack, index, self) => 
+            index === self.findIndex(p => p.id === pack.id)
+         );
+         
+         this.availablePacks = uniquePacks;
+         console.log('Available level packs:', this.availablePacks.length, '(local + server)');
+         return this.availablePacks;
+         
+      } catch (error) {
+         console.error('Failed to load level packs:', error);
+         return [];
+      }
+   }
+   
+   getLocalLevelPacks() {
+      const localPacks = [];
+      
+      try {
+         console.log('Scanning localStorage for level packs...');
+         console.log('Total localStorage items:', localStorage.length);
+         
+         // Debug: List all localStorage keys
+         const allKeys = [];
+         for (let i = 0; i < localStorage.length; i++) {
+            allKeys.push(localStorage.key(i));
+         }
+         console.log('All localStorage keys:', allKeys);
+         
+         // Scan localStorage for level packs
+         for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('levelPack_')) {
+               console.log('Found level pack key:', key);
+               
+               try {
+                  const packData = JSON.parse(localStorage.getItem(key));
+                  console.log('Pack data structure:', Object.keys(packData));
+                  
+                  // Handle different possible data structures
+                  let levels = packData.levels;
+                  let name = packData.name || 'Unnamed Pack';
+                  let id = packData.id || key.replace('levelPack_', '');
+                  
+                  if (!levels || !Array.isArray(levels)) {
+                     console.warn('Invalid level pack structure:', packData);
+                     continue;
+                  }
+                  
+                  // Create preview from first 3 levels
+                  const preview = levels.slice(0, 3).map(level => {
+                     const inputs = level.inputs ? level.inputs.join(' + ') : 'Unknown';
+                     const result = level.result || 'Unknown';
+                     return `${inputs} = ${result}`;
+                  });
+                  
+                  localPacks.push({
+                     id: id,
+                     filename: packData.filename || `${name}.json`,
+                     name: name,
+                     timestamp: packData.timestamp || new Date().toISOString(),
+                     totalLevels: levels.length,
+                     preview: preview,
+                     source: 'local'
+                  });
+                  
+                  console.log('Added local pack:', name, 'with', levels.length, 'levels');
+               } catch (parseError) {
+                  console.error('Error parsing level pack:', key, parseError);
+               }
+            }
+         }
+         
+         console.log('Found local level packs:', localPacks.length);
+         return localPacks;
+         
+      } catch (error) {
+         console.error('Error scanning local level packs:', error);
+         return [];
+      }
+   }
+   
+   async loadLevelPack(packId) {
+      try {
+         console.log(`Loading level pack: ${packId}`);
+         
+         // Try to load from localStorage first (if saved locally)
+         const savedPack = localStorage.getItem(`levelPack_${packId}`);
+         if (savedPack) {
+            console.log('Found level pack in localStorage:', packId);
+            const packData = JSON.parse(savedPack);
+            this.currentLevelPack = packData;
+            console.log('Loaded pack data:', packData.name, 'with', packData.levels.length, 'levels');
+            return packData.levels;
+         }
+         
+         // Try to fetch from server
+         try {
+            console.log('Trying to fetch from server:', packId);
+            const response = await fetch(`/netlify/functions/get-levels?id=${packId}`);
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+               console.log('Loaded level pack from server');
+               this.currentLevelPack = result.data;
+               
+               // Save to localStorage for future use
+               localStorage.setItem(`levelPack_${packId}`, JSON.stringify(result.data));
+               
+               return result.data.levels;
+            }
+         } catch (serverError) {
+            console.warn('Could not fetch from server:', serverError);
+         }
+         
+         // Fallback to default levels
+         console.log('Using default levels as fallback');
+         return this.defaultLevels;
+         
+      } catch (error) {
+         console.error('Failed to load level pack:', error);
+         return this.defaultLevels;
+      }
+   }
+   
+   getCurrentLevels() {
+      return this.currentLevelPack ? this.currentLevelPack.levels : this.defaultLevels;
+   }
+   
+   getDefaultLevels() {
+      return [
       {
          level: 1,
          inputs: ["🔥", "💧"],
@@ -302,7 +459,26 @@ const GAME_DATA = {
          result: "🛡️",
          names: {a: "crown", b: "castle", c: "sword", result: "shield"},
       },
-   ],
+      ];
+   }
+   
+   // Save level pack to localStorage for offline use
+   saveLevelPackLocally(packData) {
+      try {
+         localStorage.setItem(`levelPack_${packData.id}`, JSON.stringify(packData));
+         console.log('Level pack saved locally:', packData.name);
+      } catch (error) {
+         console.error('Failed to save level pack locally:', error);
+      }
+   }
+}
+
+// Global level manager instance
+const levelManager = new LevelManager();
+
+// Backward compatibility - GAME_DATA will be populated dynamically
+const GAME_DATA = {
+   levels: levelManager.getDefaultLevels()
 }
 
 // Sound Manager
@@ -375,6 +551,10 @@ class SoundManager {
 class HapticManager {
    constructor() {
       this.enabled = true
+   }
+   
+   setEnabled(enabled) {
+      this.enabled = enabled
    }
    
    vibrate(pattern) {
@@ -475,11 +655,24 @@ class EmojiAlchemyGame {
       this.hapticManager = new HapticManager()
       this.hapticManager.setEnabled(this.gameData.settings.vibrationEnabled)
       
+      // Initialize level manager
+      this.levelManager = levelManager
+      
       // Prevent duplicate setup
       this.keyboardSetup = false
       
       // Game session tracking
       this.sessionStartTime = Date.now()
+      
+      // Level pack selector state
+      this.levelPackSelectorOpen = false
+      this.levelPackPanel = null
+      
+      // Settings menu state
+      this.settingsMenuOpen = false
+      this.settingsPanel = null
+      this.settingsOverlay = null
+      this.settingsButton = null
 
       this.init()
    }
@@ -533,7 +726,9 @@ class EmojiAlchemyGame {
          
          this.setupKeyboardShortcuts()
          this.setupGame()
-         this.loadLevel(this.currentLevel)
+         
+         // Load available level packs and show selector
+         this.showLevelPackSelector()
          
          console.log("Game initialized successfully")
       } catch (error) {
@@ -652,6 +847,14 @@ class EmojiAlchemyGame {
          // R key to restart
          else if (event.key.toLowerCase() === 'r') {
             this.restartCurrentLevel()
+         }
+         // S key to show settings
+         else if (event.key.toLowerCase() === 's') {
+            this.showSettingsMenu()
+         }
+         // Escape key to hide settings
+         else if (event.key === 'Escape') {
+            this.hideSettingsMenu()
          }
       })
    }
@@ -785,6 +988,10 @@ class EmojiAlchemyGame {
          this.highScoreText.y = 80
          this.highScoreText.anchor.x = 1
          this.app.stage.addChild(this.highScoreText)
+         
+         // Settings Button
+         this.settingsButton = this.createSettingsButton()
+         this.app.stage.addChild(this.settingsButton)
          
       } catch (error) {
          console.error('Error setting up game:', error)
@@ -1514,6 +1721,563 @@ class EmojiAlchemyGame {
       })
 
       this.app.stage.addChild(restartButton)
+   }
+   
+   async showLevelPackSelector() {
+      try {
+         console.log('=== SHOWING LEVEL PACK SELECTOR ===')
+         
+         // Load available packs
+         const availablePacks = await this.levelManager.loadAvailablePacks()
+         
+         // Create overlay
+         this.levelPackOverlay = new PIXI.Graphics()
+         this.levelPackOverlay.beginFill(0x000000, 0.8)
+         this.levelPackOverlay.drawRect(0, 0, this.gameWidth, this.gameHeight)
+         this.levelPackOverlay.endFill()
+         this.levelPackOverlay.eventMode = 'static'
+         
+         // Create selector panel
+         this.levelPackPanel = new PIXI.Graphics()
+         this.levelPackPanel.beginFill(0x2c3e50, 0.95)
+         this.levelPackPanel.lineStyle(3, 0x3498db)
+         this.levelPackPanel.drawRoundedRect(0, 0, 350, 400, 15)
+         this.levelPackPanel.endFill()
+         this.levelPackPanel.x = (this.gameWidth - 350) / 2
+         this.levelPackPanel.y = (this.gameHeight - 400) / 2
+         
+         // Title
+         const title = new PIXI.Text('Select Level Pack', {
+            fontFamily: 'Arial',
+            fontSize: 24,
+            fill: 0xf1c40f,
+            align: 'center'
+         })
+         title.anchor.set(0.5)
+         title.x = 175
+         title.y = 40
+         this.levelPackPanel.addChild(title)
+         
+         let yPos = 90
+         
+         // Default levels button
+         const defaultButton = this.createPackButton('Default Levels', '50 built-in levels', 175, yPos, () => {
+            this.selectLevelPack('default')
+         })
+         this.levelPackPanel.addChild(defaultButton)
+         yPos += 70
+         
+         // Available packs
+         if (availablePacks.length > 0) {
+            availablePacks.forEach((pack, index) => {
+               if (yPos < 350) { // Don't overflow panel
+                  const packButton = this.createPackButton(
+                     pack.name, 
+                     `${pack.totalLevels} levels - ${new Date(pack.timestamp).toLocaleDateString()}`,
+                     175, 
+                     yPos, 
+                     () => this.selectLevelPack(pack.id)
+                  )
+                  this.levelPackPanel.addChild(packButton)
+                  yPos += 70
+               }
+            })
+         } else {
+            // No packs available message
+            const noPacksText = new PIXI.Text('No custom level packs found.\nUsing default levels.', {
+               fontFamily: 'Arial',
+               fontSize: 14,
+               fill: 0xbdc3c7,
+               align: 'center'
+            })
+            noPacksText.anchor.set(0.5)
+            noPacksText.x = 175
+            noPacksText.y = yPos + 20
+            this.levelPackPanel.addChild(noPacksText)
+         }
+         
+         // Admin panel link
+         const adminText = new PIXI.Text('Create levels at /admin-editor', {
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fill: 0x95a5a6,
+            align: 'center'
+         })
+         adminText.anchor.set(0.5)
+         adminText.x = 175
+         adminText.y = 370
+         this.levelPackPanel.addChild(adminText)
+         
+         // Add to stage
+         this.app.stage.addChild(this.levelPackOverlay)
+         this.app.stage.addChild(this.levelPackPanel)
+         
+         // Animate in
+         this.levelPackPanel.alpha = 0
+         this.levelPackPanel.scale.set(0.8)
+         
+         const animateIn = () => {
+            this.levelPackPanel.alpha += 0.1
+            this.levelPackPanel.scale.x += 0.02
+            this.levelPackPanel.scale.y += 0.02
+            
+            if (this.levelPackPanel.alpha < 1) {
+               requestAnimationFrame(animateIn)
+            } else {
+               this.levelPackPanel.alpha = 1
+               this.levelPackPanel.scale.set(1)
+            }
+         }
+         animateIn()
+         
+      } catch (error) {
+         console.error('Error showing level pack selector:', error)
+         // Fallback to default levels
+         this.selectLevelPack('default')
+      }
+   }
+   
+   createPackButton(title, subtitle, x, y, onClick) {
+      const container = new PIXI.Container()
+      
+      // Button background
+      const bg = new PIXI.Graphics()
+      bg.beginFill(0x34495e)
+      bg.lineStyle(2, 0x3498db)
+      bg.drawRoundedRect(-150, -25, 300, 50, 10)
+      bg.endFill()
+      
+      // Title text
+      const titleText = new PIXI.Text(title, {
+         fontFamily: 'Arial',
+         fontSize: 16,
+         fill: 0xffffff,
+         align: 'center'
+      })
+      titleText.anchor.set(0.5)
+      titleText.y = -8
+      
+      // Subtitle text
+      const subtitleText = new PIXI.Text(subtitle, {
+         fontFamily: 'Arial',
+         fontSize: 12,
+         fill: 0xbdc3c7,
+         align: 'center'
+      })
+      subtitleText.anchor.set(0.5)
+      subtitleText.y = 8
+      
+      container.addChild(bg)
+      container.addChild(titleText)
+      container.addChild(subtitleText)
+      container.x = x
+      container.y = y
+      
+      // Make interactive
+      container.eventMode = 'static'
+      container.cursor = 'pointer'
+      container.hitArea = new PIXI.Rectangle(-160, -35, 320, 70)
+      
+      // Hover effects
+      container.on('pointerover', () => {
+         bg.tint = 0x3498db
+         container.scale.set(1.05)
+      })
+      
+      container.on('pointerout', () => {
+         bg.tint = 0xffffff
+         container.scale.set(1)
+      })
+      
+      container.on('pointerdown', () => {
+         bg.tint = 0x2980b9
+         container.scale.set(0.95)
+         this.soundManager.playClick()
+         this.hapticManager.light()
+         onClick()
+      })
+      
+      return container
+   }
+   
+   async selectLevelPack(packId) {
+      try {
+         console.log(`Selected level pack: ${packId}`)
+         
+         // Hide selector
+         this.hideLevelPackSelector()
+         
+         // Load levels
+         if (packId === 'default') {
+            GAME_DATA.levels = this.levelManager.getDefaultLevels()
+         } else {
+            const levels = await this.levelManager.loadLevelPack(packId)
+            GAME_DATA.levels = levels
+         }
+         
+         console.log(`Loaded ${GAME_DATA.levels.length} levels`)
+         
+         // Reset game state
+         this.currentLevel = 0
+         this.score = 0
+         
+         // Start game
+         this.loadLevel(this.currentLevel)
+         
+         this.showQuickFeedback(`Loaded ${GAME_DATA.levels.length} levels!`, 0x27ae60)
+         
+      } catch (error) {
+         console.error('Error selecting level pack:', error)
+         this.showErrorMessage('Failed to load level pack')
+      }
+   }
+   
+   hideLevelPackSelector() {
+      if (this.levelPackOverlay && this.levelPackOverlay.parent) {
+         this.app.stage.removeChild(this.levelPackOverlay)
+         if (this.levelPackOverlay.destroy) this.levelPackOverlay.destroy()
+         this.levelPackOverlay = null
+      }
+      
+      if (this.levelPackPanel && this.levelPackPanel.parent) {
+         this.app.stage.removeChild(this.levelPackPanel)
+         if (this.levelPackPanel.destroy) this.levelPackPanel.destroy()
+         this.levelPackPanel = null
+      }
+   }
+   
+   createSettingsButton() {
+      const container = new PIXI.Container()
+      
+      // Button background
+      const bg = new PIXI.Graphics()
+      bg.beginFill(0x34495e)
+      bg.lineStyle(2, 0x2c3e50)
+      bg.drawRoundedRect(-20, -20, 40, 40, 8)
+      bg.endFill()
+      
+      // Settings icon (gear emoji)
+      const icon = new PIXI.Text('⚙️', {
+         fontFamily: 'Arial',
+         fontSize: 20,
+         align: 'center'
+      })
+      icon.anchor.set(0.5)
+      
+      container.addChild(bg)
+      container.addChild(icon)
+      container.x = this.gameWidth - 30
+      container.y = 30
+      
+      // Make interactive
+      container.eventMode = 'static'
+      container.cursor = 'pointer'
+      container.hitArea = new PIXI.Rectangle(-25, -25, 50, 50)
+      
+      // Hover effects
+      container.on('pointerover', () => {
+         bg.tint = 0x3498db
+         container.scale.set(1.1)
+      })
+      
+      container.on('pointerout', () => {
+         bg.tint = 0xffffff
+         container.scale.set(1)
+      })
+      
+      container.on('pointerdown', () => {
+         bg.tint = 0x2980b9
+         container.scale.set(0.9)
+         this.soundManager.playClick()
+         this.hapticManager.light()
+         this.showSettingsMenu()
+      })
+      
+      return container
+   }
+   
+   showSettingsMenu() {
+      if (this.settingsMenuOpen) return
+      
+      console.log('=== SHOWING SETTINGS MENU ===')
+      this.settingsMenuOpen = true
+      
+      // Create overlay
+      this.settingsOverlay = new PIXI.Graphics()
+      this.settingsOverlay.beginFill(0x000000, 0.8)
+      this.settingsOverlay.drawRect(0, 0, this.gameWidth, this.gameHeight)
+      this.settingsOverlay.endFill()
+      this.settingsOverlay.eventMode = 'static'
+      this.settingsOverlay.on('pointerdown', () => {
+         this.hideSettingsMenu()
+      })
+      
+      // Create settings panel
+      this.settingsPanel = new PIXI.Graphics()
+      this.settingsPanel.beginFill(0x2c3e50, 0.95)
+      this.settingsPanel.lineStyle(3, 0x3498db)
+      this.settingsPanel.drawRoundedRect(0, 0, 360, 500, 15)
+      this.settingsPanel.endFill()
+      this.settingsPanel.x = (this.gameWidth - 360) / 2
+      this.settingsPanel.y = (this.gameHeight - 500) / 2
+      
+      this.createSettingsContent()
+      
+      // Add to stage
+      this.app.stage.addChild(this.settingsOverlay)
+      this.app.stage.addChild(this.settingsPanel)
+      
+      // Animate in
+      this.settingsPanel.alpha = 0
+      this.settingsPanel.scale.set(0.8)
+      
+      const animateIn = () => {
+         this.settingsPanel.alpha += 0.1
+         this.settingsPanel.scale.x += 0.02
+         this.settingsPanel.scale.y += 0.02
+         
+         if (this.settingsPanel.alpha < 1) {
+            requestAnimationFrame(animateIn)
+         } else {
+            this.settingsPanel.alpha = 1
+            this.settingsPanel.scale.set(1)
+         }
+      }
+      animateIn()
+   }
+   
+   createSettingsContent() {
+      let yPos = 30
+      
+      // Title
+      const title = new PIXI.Text('⚙️ Settings', {
+         fontFamily: 'Arial',
+         fontSize: 24,
+         fill: 0xf1c40f,
+         align: 'center'
+      })
+      title.anchor.set(0.5)
+      title.x = 180
+      title.y = yPos
+      this.settingsPanel.addChild(title)
+      yPos += 50
+      
+      // Current Level Pack Info
+      const currentPack = this.levelManager.currentLevelPack
+      const packName = currentPack ? currentPack.name : 'Default Levels'
+      const packInfo = new PIXI.Text(`📦 Current Pack: ${packName}`, {
+         fontFamily: 'Arial',
+         fontSize: 14,
+         fill: 0xecf0f1,
+         align: 'center'
+      })
+      packInfo.anchor.set(0.5)
+      packInfo.x = 180
+      packInfo.y = yPos
+      this.settingsPanel.addChild(packInfo)
+      yPos += 30
+      
+      const levelInfo = new PIXI.Text(`📊 ${GAME_DATA.levels.length} levels available`, {
+         fontFamily: 'Arial',
+         fontSize: 12,
+         fill: 0xbdc3c7,
+         align: 'center'
+      })
+      levelInfo.anchor.set(0.5)
+      levelInfo.x = 180
+      levelInfo.y = yPos
+      this.settingsPanel.addChild(levelInfo)
+      yPos += 40
+      
+      // Change Level Pack Button
+      const changeLevelPackBtn = this.createMenuButton('🔄 Change Level Pack', 180, yPos, () => {
+         this.hideSettingsMenu()
+         this.showLevelPackSelector()
+      })
+      this.settingsPanel.addChild(changeLevelPackBtn)
+      yPos += 60
+      
+      // Audio Controls
+      const audioTitle = new PIXI.Text('🔊 Audio Settings', {
+         fontFamily: 'Arial',
+         fontSize: 16,
+         fill: 0x3498db,
+         align: 'center'
+      })
+      audioTitle.anchor.set(0.5)
+      audioTitle.x = 180
+      audioTitle.y = yPos
+      this.settingsPanel.addChild(audioTitle)
+      yPos += 35
+      
+      // Sound Toggle
+      const soundStatus = this.gameData.settings.soundEnabled ? 'ON' : 'OFF'
+      const soundBtn = this.createMenuButton(`🔊 Sound: ${soundStatus}`, 180, yPos, () => {
+         this.toggleSound()
+      })
+      this.settingsPanel.addChild(soundBtn)
+      yPos += 50
+      
+      // Vibration Toggle
+      const vibrationStatus = this.gameData.settings.vibrationEnabled ? 'ON' : 'OFF'
+      const vibrationBtn = this.createMenuButton(`📳 Vibration: ${vibrationStatus}`, 180, yPos, () => {
+         this.toggleVibration()
+      })
+      this.settingsPanel.addChild(vibrationBtn)
+      yPos += 60
+      
+      // Game Stats
+      const statsTitle = new PIXI.Text('📈 Game Statistics', {
+         fontFamily: 'Arial',
+         fontSize: 16,
+         fill: 0x3498db,
+         align: 'center'
+      })
+      statsTitle.anchor.set(0.5)
+      statsTitle.x = 180
+      statsTitle.y = yPos
+      this.settingsPanel.addChild(statsTitle)
+      yPos += 35
+      
+      // Stats info
+      const stats = [
+         `🏆 High Score: ${this.gameData.highScore}`,
+         `📊 Current Score: ${this.score}`,
+         `🎯 Current Level: ${this.currentLevel + 1}`,
+         `✅ Completed: ${this.gameData.completedLevels.length} levels`
+      ]
+      
+      stats.forEach(stat => {
+         const statText = new PIXI.Text(stat, {
+            fontFamily: 'Arial',
+            fontSize: 12,
+            fill: 0xbdc3c7,
+            align: 'center'
+         })
+         statText.anchor.set(0.5)
+         statText.x = 180
+         statText.y = yPos
+         this.settingsPanel.addChild(statText)
+         yPos += 20
+      })
+      
+      yPos += 20
+      
+      // Admin Panel Link
+      const adminBtn = this.createMenuButton('⚙️ Level Editor', 180, yPos, () => {
+         window.open('/admin-editor.html', '_blank')
+      })
+      this.settingsPanel.addChild(adminBtn)
+      yPos += 60
+      
+      // Close Button
+      const closeBtn = this.createMenuButton('✕ Close', 180, yPos, () => {
+         this.hideSettingsMenu()
+      }, 0x95a5a6)
+      this.settingsPanel.addChild(closeBtn)
+   }
+   
+   createMenuButton(text, x, y, onClick, color = 0x34495e) {
+      const container = new PIXI.Container()
+      
+      // Button background
+      const bg = new PIXI.Graphics()
+      bg.beginFill(color)
+      bg.lineStyle(2, 0x3498db)
+      bg.drawRoundedRect(-140, -20, 280, 40, 8)
+      bg.endFill()
+      
+      // Button text
+      const buttonText = new PIXI.Text(text, {
+         fontFamily: 'Arial',
+         fontSize: 14,
+         fill: 0xffffff,
+         align: 'center'
+      })
+      buttonText.anchor.set(0.5)
+      
+      container.addChild(bg)
+      container.addChild(buttonText)
+      container.x = x
+      container.y = y
+      
+      // Make interactive
+      container.eventMode = 'static'
+      container.cursor = 'pointer'
+      container.hitArea = new PIXI.Rectangle(-150, -25, 300, 50)
+      
+      // Hover effects
+      container.on('pointerover', () => {
+         bg.tint = 0x3498db
+         container.scale.set(1.05)
+      })
+      
+      container.on('pointerout', () => {
+         bg.tint = 0xffffff
+         container.scale.set(1)
+      })
+      
+      container.on('pointerdown', () => {
+         bg.tint = 0x2980b9
+         container.scale.set(0.95)
+         this.soundManager.playClick()
+         this.hapticManager.light()
+         setTimeout(onClick, 100)
+      })
+      
+      return container
+   }
+   
+   toggleSound() {
+      this.gameData.settings.soundEnabled = !this.gameData.settings.soundEnabled
+      this.soundManager.setEnabled(this.gameData.settings.soundEnabled)
+      this.saveGameData()
+      
+      // Refresh settings menu
+      this.hideSettingsMenu()
+      setTimeout(() => this.showSettingsMenu(), 100)
+      
+      const status = this.gameData.settings.soundEnabled ? 'enabled' : 'disabled'
+      this.showQuickFeedback(`Sound ${status}`, 0x3498db)
+   }
+   
+   toggleVibration() {
+      this.gameData.settings.vibrationEnabled = !this.gameData.settings.vibrationEnabled
+      this.hapticManager.setEnabled(this.gameData.settings.vibrationEnabled)
+      this.saveGameData()
+      
+      // Test vibration if enabled
+      if (this.gameData.settings.vibrationEnabled) {
+         this.hapticManager.light()
+      }
+      
+      // Refresh settings menu
+      this.hideSettingsMenu()
+      setTimeout(() => this.showSettingsMenu(), 100)
+      
+      const status = this.gameData.settings.vibrationEnabled ? 'enabled' : 'disabled'
+      this.showQuickFeedback(`Vibration ${status}`, 0x3498db)
+   }
+   
+   hideSettingsMenu() {
+      if (!this.settingsMenuOpen) return
+      
+      console.log('=== HIDING SETTINGS MENU ===')
+      this.settingsMenuOpen = false
+      
+      // Remove overlay
+      if (this.settingsOverlay && this.settingsOverlay.parent) {
+         this.app.stage.removeChild(this.settingsOverlay)
+         if (this.settingsOverlay.destroy) this.settingsOverlay.destroy()
+         this.settingsOverlay = null
+      }
+      
+      // Remove panel
+      if (this.settingsPanel && this.settingsPanel.parent) {
+         this.app.stage.removeChild(this.settingsPanel)
+         if (this.settingsPanel.destroy) this.settingsPanel.destroy()
+         this.settingsPanel = null
+      }
    }
 }
 
