@@ -551,20 +551,10 @@
                 const levels = JSON.parse(jsonData);
                 
                 if (!Array.isArray(levels)) {
-                    throw new Error('JSON must be an array of levels');
+                    throw new Error('JSON must be an array');
                 }
                 
-                // Validate each level
-                levels.forEach((level, index) => {
-                    if (!level.inputs || !Array.isArray(level.inputs) || level.inputs.length !== 2) {
-                        throw new Error(`Level ${index + 1}: Invalid inputs array`);
-                    }
-                    if (!level.result) {
-                        throw new Error(`Level ${index + 1}: Missing result`);
-                    }
-                });
-                
-                showAlert(`✅ Valid JSON! Found ${levels.length} levels`, 'success');
+                showAlert(`✅ Valid JSON! Found ${levels.length} items`, 'success');
                 
             } catch (error) {
                 showAlert(`❌ Invalid JSON: ${error.message}`, 'error');
