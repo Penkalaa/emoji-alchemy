@@ -923,22 +923,61 @@
         
         async function deletePack(id) {
             const pack = currentPacks.find(p => p.id === id);
-            if (!pack) return;
+            if (!pack) {
+                showAlert('Pack not found', 'error');
+                return;
+            }
             
-            if (!confirm(`Are you sure you want to delete "${pack.name}"?\n\nThis action cannot be undone.`)) {
+            if (!confirm(`🗑️ Are you sure you want to delete "${pack.name}"?\n\nThis will remove:\n- ${pack.totalLevels || 0} levels\n- All progress data\n\nThis action cannot be undone!`)) {
                 return;
             }
             
             try {
+                console.log('Deleting pack:', id, pack.name);
+                
                 // Remove from localStorage
                 localStorage.removeItem(`levelPack_${id}`);
                 
-                showAlert(`Deleted pack "${pack.name}"`, 'success');
+                // Also remove any progress data for this pack
+                const gameData = JSON.parse(localStorage.getItem('emojiAlchemyData') || '{}');
+                if (gameData.levelPackProgress && gameData.levelPackProgress[id]) {
+                    delete gameData.levelPackProgress[id];
+                    localStorage.setItem('emojiAlchemyData', JSON.stringify(gameData));
+                    console.log('Removed progress data for pack');
+                }
+                
+                console.log('Removed from localStorage');
+                
+                // Try to delete from cloud (if it exists there)
+                try {
+                    const response = await fetch(`/.netlify/functions/delete-levels?id=${id}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Deleted from cloud storage');
+                        showAlert(`🗑️ Deleted "${pack.name}" from cloud and locally!`, 'success');
+                    } else {
+                        console.log('Cloud delete failed, but local delete succeeded');
+                        showAlert(`🗑️ Deleted "${pack.name}" locally (cloud unavailable)`, 'success');
+                    }
+                } catch (cloudError) {
+                    console.log('Cloud delete error:', cloudError);
+                    showAlert(`🗑️ Deleted "${pack.name}" locally (cloud unavailable)`, 'success');
+                }
+                
+                // Remove from current packs array
+                const index = currentPacks.findIndex(p => p.id === id);
+                if (index > -1) {
+                    currentPacks.splice(index, 1);
+                }
+                
+                // Refresh the display
                 loadPacks();
                 
             } catch (error) {
                 console.error('Error deleting pack:', error);
-                showAlert('Failed to delete pack', 'error');
+                showAlert(`❌ Failed to delete pack: ${error.message}`, 'error');
             }
         }
         
