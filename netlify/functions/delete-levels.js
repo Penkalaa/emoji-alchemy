@@ -106,17 +106,57 @@ exports.handler = async (event, context) => {
           }
         });
         
+        // Check if any rows were affected
+        const responseHeaders = {};
+        for (let [key, value] of supabaseResponse.headers.entries()) {
+          responseHeaders[key] = value;
+        }
+        console.log('Supabase response headers:', responseHeaders);
+        
         console.log('Supabase response status:', supabaseResponse.status);
         
         const responseText = await supabaseResponse.text();
         console.log('Supabase response body:', responseText);
         
         if (supabaseResponse.ok) {
-          cloudDeleteSuccess = true;
-          console.log('Level pack deleted from Supabase successfully');
-          console.log('Deleted records:', responseText);
+          // Check if any records were actually deleted
+          const deletedRecords = responseText ? JSON.parse(responseText) : [];
+          
+          if (deletedRecords.length > 0) {
+            cloudDeleteSuccess = true;
+            console.log('Level pack deleted from Supabase successfully');
+            console.log('Deleted records:', responseText);
+          } else {
+            console.warn('Supabase delete returned 200 but no records were deleted!');
+            console.warn('This usually means RLS (Row Level Security) is blocking the delete');
+            console.warn('Response body:', responseText);
+            
+            // Still return error even though status was 200
+            return {
+              statusCode: 403,
+              headers,
+              body: JSON.stringify({ 
+                success: false, 
+                error: 'Delete blocked - possibly due to Row Level Security (RLS)',
+                details: 'Record exists but could not be deleted. Check Supabase RLS policies.',
+                packId: packId,
+                responseBody: responseText
+              })
+            };
+          }
         } else {
           console.warn('Supabase delete failed:', supabaseResponse.status, responseText);
+          
+          return {
+            statusCode: supabaseResponse.status,
+            headers,
+            body: JSON.stringify({ 
+              success: false, 
+              error: `Supabase delete failed: ${supabaseResponse.status}`,
+              details: responseText,
+              packId: packId
+            })
+          };
         }
       } catch (supabaseError) {
         console.warn('Supabase delete error:', supabaseError);
