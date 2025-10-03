@@ -30,6 +30,8 @@ exports.handler = async (event, context) => {
     // Parse request body
     const data = JSON.parse(event.body);
     
+    console.log('Save function called with data:', JSON.stringify(data, null, 2));
+    
     // Validate required fields
     if (!data.name || !data.levels || !Array.isArray(data.levels)) {
       return {
@@ -41,16 +43,27 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Create timestamp
+    // Determine if this is an update (has existing ID) or create (new)
+    const isUpdate = data.id && data.id.length > 0;
     const timestamp = new Date().toISOString();
-    const timestampShort = timestamp.slice(0, 19).replace(/[:-]/g, '');
     
-    // Create filename with timestamp
-    const filename = `${data.name}-${timestampShort}.json`;
+    let packId, filename;
+    
+    if (isUpdate) {
+      // Use existing ID for update
+      packId = data.id;
+      filename = data.filename || `${data.name}-${packId}.json`;
+      console.log('UPDATE operation for existing pack:', packId);
+    } else {
+      // Create new ID for new pack
+      packId = timestamp.slice(0, 19).replace(/[:-]/g, '');
+      filename = `${data.name}-${packId}.json`;
+      console.log('CREATE operation for new pack:', packId);
+    }
     
     // Prepare response data
     const savedData = {
-      id: timestampShort,
+      id: packId,
       filename: filename,
       name: data.name,
       timestamp: timestamp,
@@ -73,31 +86,58 @@ exports.handler = async (event, context) => {
       const supabaseKey = process.env.SUPABASE_ANON_KEY;
       
       if (supabaseUrl && supabaseKey) {
-        const supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({
-            id: timestampShort,
-            name: data.name,
-            filename: filename,
-            timestamp: timestamp,
-            total_levels: data.levels.length,
-            level_data: savedData,
-            created_at: timestamp,
-            ip_address: event.headers['x-forwarded-for'] || event.headers['client-ip']
-          })
-        });
+        let supabaseResponse;
+        
+        if (isUpdate) {
+          // UPDATE existing record
+          console.log('Updating existing record in Supabase:', packId);
+          supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs?id=eq.${packId}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              name: data.name,
+              filename: filename,
+              timestamp: timestamp,
+              total_levels: data.levels.length,
+              level_data: savedData,
+              updated_at: timestamp
+            })
+          });
+        } else {
+          // CREATE new record
+          console.log('Creating new record in Supabase:', packId);
+          supabaseResponse = await fetch(`${supabaseUrl}/rest/v1/level_packs`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+              id: packId,
+              name: data.name,
+              filename: filename,
+              timestamp: timestamp,
+              total_levels: data.levels.length,
+              level_data: savedData,
+              created_at: timestamp,
+              ip_address: event.headers['x-forwarded-for'] || event.headers['client-ip']
+            })
+          });
+        }
         
         if (supabaseResponse.ok) {
           cloudSaveSuccess = true;
-          console.log('Level pack saved to Supabase successfully');
+          console.log(`Level pack ${isUpdate ? 'updated' : 'saved'} to Supabase successfully`);
         } else {
-          console.warn('Supabase save failed:', await supabaseResponse.text());
+          const errorText = await supabaseResponse.text();
+          console.warn(`Supabase ${isUpdate ? 'update' : 'save'} failed:`, errorText);
         }
       } else {
         console.log('Supabase credentials not configured, skipping cloud save');
@@ -108,10 +148,11 @@ exports.handler = async (event, context) => {
     
     // Always log the save attempt
     console.log('Level data save attempt:', {
-      id: timestampShort,
+      id: packId,
       filename,
       totalLevels: data.levels.length,
       timestamp,
+      isUpdate,
       cloudSaved: cloudSaveSuccess
     });
 
@@ -120,12 +161,13 @@ exports.handler = async (event, context) => {
       headers,
       body: JSON.stringify({
         success: true,
-        message: 'Levels saved successfully!',
+        message: isUpdate ? 'Level pack updated successfully!' : 'Level pack created successfully!',
         data: {
-          id: timestampShort,
+          id: packId,
           filename: filename,
           timestamp: timestamp,
-          totalLevels: data.levels.length
+          totalLevels: data.levels.length,
+          isUpdate: isUpdate
         },
         // Include the full data for download
         fullData: savedData

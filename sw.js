@@ -1,11 +1,11 @@
 // Auto-generate cache version based on timestamp (cache busting)
-const CACHE_VERSION = '2025-01-03-v2'; // Update this for each deploy
+const CACHE_VERSION = `v${Date.now()}`; // Dynamic version for each deploy
 const CACHE_NAME = `emoji-alchemy-${CACHE_VERSION}`;
 const urlsToCache = [
   '/',
   './index.html',
   './game.js',
-  './admin-editor.html',
+  './admin.html',
   './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js'
 ];
@@ -25,41 +25,47 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Fetch event - Network first for HTML, cache first for assets
+// Fetch event - Aggressive network first for app files
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Network first for HTML files and API calls
+  // Always network first for app files (HTML, JS, functions)
   if (event.request.mode === 'navigate' || 
       url.pathname.endsWith('.html') ||
-      url.pathname.includes('/functions/')) {
+      url.pathname.endsWith('.js') ||
+      url.pathname.includes('/functions/') ||
+      url.pathname.includes('/admin')) {
+    
+    console.log('SW: Network first for:', url.pathname);
+    
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, {
+        cache: 'no-cache', // Force fresh fetch
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      })
         .then((response) => {
-          // Cache successful responses
-          if (response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseClone);
-              });
-          }
+          console.log('SW: Fresh fetch successful for:', url.pathname);
+          // Don't cache HTML/JS files to ensure freshness
           return response;
         })
-        .catch(() => {
-          // Fallback to cache if network fails
+        .catch((error) => {
+          console.log('SW: Network failed, trying cache for:', url.pathname);
+          // Fallback to cache only if network completely fails
           return caches.match(event.request);
         })
     );
   } 
-  // Cache first for static assets
+  // Cache first only for external assets (CDN, images, etc.)
   else {
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
           return response || fetch(event.request)
             .then((fetchResponse) => {
-              // Cache new assets
+              // Cache external assets
               if (fetchResponse.status === 200) {
                 const responseClone = fetchResponse.clone();
                 caches.open(CACHE_NAME)
@@ -100,5 +106,24 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    console.log('SW: Clearing all caches');
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          console.log('SW: Deleting cache', cacheName);
+          return caches.delete(cacheName);
+        })
+      );
+    }).then(() => {
+      console.log('SW: All caches cleared');
+      self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'CACHE_CLEARED' });
+        });
+      });
+    });
   }
 });

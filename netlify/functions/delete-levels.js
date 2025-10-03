@@ -28,16 +28,23 @@ exports.handler = async (event, context) => {
   }
 
   try {
+    console.log('Delete function called with event:', JSON.stringify(event, null, 2));
+    
     // Get pack ID from query parameters
     const packId = event.queryStringParameters?.id;
     
+    console.log('Extracted pack ID:', packId);
+    console.log('All query parameters:', event.queryStringParameters);
+    
     if (!packId) {
+      console.log('ERROR: No pack ID provided');
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
           success: false, 
-          error: 'Pack ID is required' 
+          error: 'Pack ID is required',
+          received: event.queryStringParameters
         })
       };
     }
