@@ -214,13 +214,42 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
     <script src="game.js"></script>
     
-    <!-- PWA Service Worker -->
+    <!-- PWA Service Worker with Update Detection -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js', { scope: './' })
                     .then((registration) => {
                         console.log('SW registered: ', registration);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('SW: New version found, installing...');
+                            
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available
+                                    console.log('SW: New version ready, will refresh automatically');
+                                    
+                                    // Show update notification (optional)
+                                    if (window.gameInstance && window.gameInstance.showQuickFeedback) {
+                                        window.gameInstance.showQuickFeedback('🔄 App updated! Refreshing...', 0x3498db);
+                                    }
+                                    
+                                    // Auto-refresh after 2 seconds
+                                    setTimeout(() => {
+                                        window.location.reload();
+                                    }, 2000);
+                                }
+                            });
+                        });
+                        
+                        // Listen for controlling service worker change
+                        navigator.serviceWorker.addEventListener('controllerchange', () => {
+                            console.log('SW: Controller changed, reloading page');
+                            window.location.reload();
+                        });
                     })
                     .catch((registrationError) => {
                         console.log('SW registration failed: ', registrationError);
