@@ -104,8 +104,7 @@ exports.handler = async (event, context) => {
               filename: filename,
               timestamp: timestamp,
               total_levels: data.levels.length,
-              level_data: savedData,
-              updated_at: timestamp
+              level_data: savedData
             })
           });
         } else {
