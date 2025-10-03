@@ -1870,7 +1870,7 @@ class EmojiAlchemyGame {
          this.setupLevelPackScroll(yPos)
          
          // Admin panel link
-         const adminText = new PIXI.Text('Create levels at /admin-editor', {
+         const adminText = new PIXI.Text('📝 Create levels at /admin', {
             fontFamily: 'Arial',
             fontSize: 12,
             fill: 0x95a5a6,
@@ -2328,7 +2328,7 @@ class EmojiAlchemyGame {
       
       // Admin Panel Link
       const adminBtn = this.createMenuButton('⚙️ Level Editor', 180, yPos, () => {
-         window.open('/admin-editor.html', '_blank')
+         window.open('/admin.html', '_blank')
       })
       this.settingsPanel.addChild(adminBtn)
       yPos += 60

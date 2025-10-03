@@ -306,9 +306,6 @@
                 <button class="btn btn-primary" onclick="loadPacks()">
                     🔄 Refresh
                 </button>
-                <a href="/admin-editor.html" class="btn btn-secondary">
-                    📝 Old Editor
-                </a>
                 <a href="/" class="btn btn-primary">
                     🎮 Play Game
                 </a>
@@ -341,8 +338,48 @@
         </div>
     </div>
     
+    <!-- Edit Pack Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh;">
+            <h3 id="editTitle">✏️ Edit Level Pack</h3>
+            
+            <!-- Pack Info -->
+            <div class="form-group">
+                <label for="editPackName">Pack Name</label>
+                <input type="text" id="editPackName" required>
+            </div>
+            
+            <!-- Levels List -->
+            <div class="form-group">
+                <label>Levels (<span id="levelCount">0</span>)</label>
+                <div id="levelsList" style="max-height: 300px; overflow-y: auto; border: 2px solid #e9ecef; border-radius: 8px; padding: 10px;">
+                    <!-- Levels will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Add New Level -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h4>➕ Add New Level</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <input type="text" id="newInput1" placeholder="🔥 Input 1" maxlength="2">
+                    <input type="text" id="newInput2" placeholder="💧 Input 2" maxlength="2">
+                    <input type="text" id="newResult" placeholder="💨 Result" maxlength="2">
+                </div>
+                <button class="btn btn-success" onclick="addLevel()" style="width: 100%;">
+                    ➕ Add Level
+                </button>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="hideEditModal()">Cancel</button>
+                <button class="btn btn-success" onclick="savePack()">💾 Save Pack</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         let currentPacks = [];
+        let currentEditingPack = null;
         
         // Load packs on page load
         document.addEventListener('DOMContentLoaded', () => {
@@ -527,9 +564,173 @@
         }
         
         function editPack(id) {
-            // For now, redirect to old editor with pack loaded
-            // TODO: Create inline editor
-            showAlert('Edit functionality coming soon! Use old editor for now.', 'info');
+            const pack = currentPacks.find(p => p.id === id);
+            if (!pack) {
+                showAlert('Pack not found', 'error');
+                return;
+            }
+            
+            currentEditingPack = { ...pack };
+            
+            // Populate modal
+            document.getElementById('editTitle').textContent = `✏️ Edit: ${pack.name}`;
+            document.getElementById('editPackName').value = pack.name;
+            
+            // Load levels
+            displayLevelsInEditor(pack.levels || []);
+            
+            // Show modal
+            document.getElementById('editModal').style.display = 'block';
+        }
+        
+        function displayLevelsInEditor(levels) {
+            const container = document.getElementById('levelsList');
+            document.getElementById('levelCount').textContent = levels.length;
+            
+            if (levels.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #7f8c8d;">
+                        No levels yet. Add some below! 👇
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = levels.map((level, index) => `
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: white; border-radius: 6px; margin-bottom: 8px;">
+                    <span style="font-weight: bold; color: #3498db; min-width: 30px;">#${index + 1}</span>
+                    <span style="font-size: 20px;">${level.inputs ? level.inputs.join(' + ') : '? + ?'}</span>
+                    <span style="color: #7f8c8d;">=</span>
+                    <span style="font-size: 20px;">${level.result || '?'}</span>
+                    <button onclick="removeLevel(${index})" style="margin-left: auto; background: #e74c3c; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer;">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        function addLevel() {
+            const input1 = document.getElementById('newInput1').value.trim();
+            const input2 = document.getElementById('newInput2').value.trim();
+            const result = document.getElementById('newResult').value.trim();
+            
+            if (!input1 || !input2 || !result) {
+                showAlert('Please fill all emoji fields', 'error');
+                return;
+            }
+            
+            // Validate emojis (basic check)
+            if (input1.length > 2 || input2.length > 2 || result.length > 2) {
+                showAlert('Please use single emojis only', 'error');
+                return;
+            }
+            
+            const newLevel = {
+                level: (currentEditingPack.levels?.length || 0) + 1,
+                inputs: [input1, input2],
+                result: result,
+                names: {
+                    a: input1,
+                    b: input2,
+                    result: result
+                }
+            };
+            
+            if (!currentEditingPack.levels) {
+                currentEditingPack.levels = [];
+            }
+            
+            currentEditingPack.levels.push(newLevel);
+            
+            // Clear inputs
+            document.getElementById('newInput1').value = '';
+            document.getElementById('newInput2').value = '';
+            document.getElementById('newResult').value = '';
+            
+            // Refresh display
+            displayLevelsInEditor(currentEditingPack.levels);
+            
+            showAlert(`Added level: ${input1} + ${input2} = ${result}`, 'success');
+        }
+        
+        function removeLevel(index) {
+            if (!currentEditingPack.levels || index < 0 || index >= currentEditingPack.levels.length) {
+                return;
+            }
+            
+            const level = currentEditingPack.levels[index];
+            if (confirm(`Remove level: ${level.inputs?.join(' + ')} = ${level.result}?`)) {
+                currentEditingPack.levels.splice(index, 1);
+                
+                // Renumber levels
+                currentEditingPack.levels.forEach((level, i) => {
+                    level.level = i + 1;
+                });
+                
+                displayLevelsInEditor(currentEditingPack.levels);
+                showAlert('Level removed', 'success');
+            }
+        }
+        
+        async function savePack() {
+            if (!currentEditingPack) return;
+            
+            const newName = document.getElementById('editPackName').value.trim();
+            if (!newName) {
+                showAlert('Please enter a pack name', 'error');
+                return;
+            }
+            
+            // Check for duplicate names (excluding current pack)
+            if (currentPacks.some(pack => pack.id !== currentEditingPack.id && pack.name.toLowerCase() === newName.toLowerCase())) {
+                showAlert('A pack with this name already exists', 'error');
+                return;
+            }
+            
+            // Update pack data
+            currentEditingPack.name = newName;
+            currentEditingPack.totalLevels = currentEditingPack.levels?.length || 0;
+            currentEditingPack.timestamp = new Date().toISOString();
+            
+            try {
+                // Save to localStorage
+                localStorage.setItem(`levelPack_${currentEditingPack.id}`, JSON.stringify(currentEditingPack));
+                
+                // Try to save to cloud
+                try {
+                    const response = await fetch('/.netlify/functions/save-levels', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(currentEditingPack)
+                    });
+                    
+                    if (response.ok) {
+                        showAlert(`Saved "${newName}" to cloud and locally!`, 'success');
+                    } else {
+                        showAlert(`Saved "${newName}" locally (cloud unavailable)`, 'success');
+                    }
+                } catch (cloudError) {
+                    showAlert(`Saved "${newName}" locally (cloud unavailable)`, 'success');
+                }
+                
+                hideEditModal();
+                loadPacks();
+                
+            } catch (error) {
+                console.error('Error saving pack:', error);
+                showAlert('Failed to save pack', 'error');
+            }
+        }
+        
+        function hideEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentEditingPack = null;
+            
+            // Clear form
+            document.getElementById('editPackName').value = '';
+            document.getElementById('newInput1').value = '';
+            document.getElementById('newInput2').value = '';
+            document.getElementById('newResult').value = '';
         }
         
         async function deletePack(id) {
@@ -584,9 +785,13 @@
         
         // Close modal when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('createModal');
-            if (event.target === modal) {
+            const createModal = document.getElementById('createModal');
+            const editModal = document.getElementById('editModal');
+            
+            if (event.target === createModal) {
                 hideCreateModal();
+            } else if (event.target === editModal) {
+                hideEditModal();
             }
         }
         
