@@ -55,6 +55,37 @@ exports.handler = async (event, context) => {
         console.log('Attempting Supabase delete for pack:', packId);
         console.log('Supabase URL:', supabaseUrl);
         
+        // First check if the record exists
+        const checkUrl = `${supabaseUrl}/rest/v1/level_packs?id=eq.${packId}&select=id,name`;
+        console.log('Checking if record exists:', checkUrl);
+        
+        const checkResponse = await fetch(checkUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`
+          }
+        });
+        
+        if (checkResponse.ok) {
+          const existingRecords = await checkResponse.json();
+          console.log('Existing records found:', existingRecords);
+          
+          if (existingRecords.length === 0) {
+            console.log('No record found with ID:', packId);
+            return {
+              statusCode: 404,
+              headers,
+              body: JSON.stringify({ 
+                success: false, 
+                error: 'Record not found',
+                packId: packId
+              })
+            };
+          }
+        }
+        
         const deleteUrl = `${supabaseUrl}/rest/v1/level_packs?id=eq.${packId}`;
         console.log('Delete URL:', deleteUrl);
         
@@ -64,18 +95,21 @@ exports.handler = async (event, context) => {
             'Content-Type': 'application/json',
             'apikey': supabaseKey,
             'Authorization': `Bearer ${supabaseKey}`,
-            'Prefer': 'return=minimal'
+            'Prefer': 'return=representation'
           }
         });
         
         console.log('Supabase response status:', supabaseResponse.status);
         
+        const responseText = await supabaseResponse.text();
+        console.log('Supabase response body:', responseText);
+        
         if (supabaseResponse.ok) {
           cloudDeleteSuccess = true;
           console.log('Level pack deleted from Supabase successfully');
+          console.log('Deleted records:', responseText);
         } else {
-          const errorText = await supabaseResponse.text();
-          console.warn('Supabase delete failed:', supabaseResponse.status, errorText);
+          console.warn('Supabase delete failed:', supabaseResponse.status, responseText);
         }
       } catch (supabaseError) {
         console.warn('Supabase delete error:', supabaseError);

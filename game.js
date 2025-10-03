@@ -8,32 +8,22 @@ class LevelManager {
    
    async loadAvailablePacks() {
       try {
-         // First, check localStorage for saved level packs
-         const localPacks = this.getLocalLevelPacks();
-         
-         // Then try to fetch from server
-         let serverPacks = [];
+         // Only fetch from cloud storage (DB)
+         let cloudPacks = [];
          try {
             const response = await fetch('/.netlify/functions/get-levels');
             const result = await response.json();
             
             if (result.success) {
-               serverPacks = result.data;
+               cloudPacks = result.data || [];
+               console.log(`Loaded ${cloudPacks.length} packs from cloud storage`);
             }
          } catch (error) {
-            console.warn('Could not fetch server level packs:', error);
+            console.warn('Could not fetch cloud level packs:', error);
          }
          
-         // Combine local and server packs (prioritize local)
-         const allPacks = [...localPacks, ...serverPacks];
-         
-         // Remove duplicates based on ID
-         const uniquePacks = allPacks.filter((pack, index, self) => 
-            index === self.findIndex(p => p.id === pack.id)
-         );
-         
-         this.availablePacks = uniquePacks;
-         console.log('Available level packs:', this.availablePacks.length, '(local + server)');
+         this.availablePacks = cloudPacks;
+         console.log('Available level packs:', this.availablePacks.length, '(cloud only)');
          return this.availablePacks;
          
       } catch (error) {
@@ -42,90 +32,14 @@ class LevelManager {
       }
    }
    
-   getLocalLevelPacks() {
-      const localPacks = [];
-      
-      try {
-         console.log('Scanning localStorage for level packs...');
-         console.log('Total localStorage items:', localStorage.length);
-         
-         // Debug: List all localStorage keys
-         const allKeys = [];
-         for (let i = 0; i < localStorage.length; i++) {
-            allKeys.push(localStorage.key(i));
-         }
-         console.log('All localStorage keys:', allKeys);
-         
-         // Scan localStorage for level packs
-         for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith('levelPack_')) {
-               console.log('Found level pack key:', key);
-               
-               try {
-                  const packData = JSON.parse(localStorage.getItem(key));
-                  console.log('Pack data structure:', Object.keys(packData));
-                  
-                  // Handle different possible data structures
-                  let levels = packData.levels;
-                  let name = packData.name || 'Unnamed Pack';
-                  let id = packData.id || key.replace('levelPack_', '');
-                  
-                  if (!levels || !Array.isArray(levels)) {
-                     console.warn('Invalid level pack structure:', packData);
-                     continue;
-                  }
-                  
-                  // Create preview from first 3 levels
-                  const preview = levels.slice(0, 3).map(level => {
-                     const inputs = level.inputs ? level.inputs.join(' + ') : 'Unknown';
-                     const result = level.result || 'Unknown';
-                     return `${inputs} = ${result}`;
-                  });
-                  
-                  localPacks.push({
-                     id: id,
-                     filename: packData.filename || `${name}.json`,
-                     name: name,
-                     timestamp: packData.timestamp || new Date().toISOString(),
-                     totalLevels: levels.length,
-                     preview: preview,
-                     source: 'local'
-                  });
-                  
-                  console.log('Added local pack:', name, 'with', levels.length, 'levels');
-               } catch (parseError) {
-                  console.error('Error parsing level pack:', key, parseError);
-               }
-            }
-         }
-         
-         console.log('Found local level packs:', localPacks.length);
-         return localPacks;
-         
-      } catch (error) {
-         console.error('Error scanning local level packs:', error);
-         return [];
-      }
-   }
    
    async loadLevelPack(packId) {
       try {
          console.log(`Loading level pack: ${packId}`);
          
-         // Try to load from localStorage first (if saved locally)
-         const savedPack = localStorage.getItem(`levelPack_${packId}`);
-         if (savedPack) {
-            console.log('Found level pack in localStorage:', packId);
-            const packData = JSON.parse(savedPack);
-            this.currentLevelPack = packData;
-            console.log('Loaded pack data:', packData.name, 'with', packData.levels.length, 'levels');
-            return packData.levels;
-         }
-         
-         // Try to fetch from server (cloud storage)
+         // Only fetch from cloud storage (DB)
          try {
-            console.log('Trying to fetch from server:', packId);
+            console.log('Fetching from cloud storage:', packId);
             
             // Get all packs and find the one we need
             const allPacksResponse = await fetch('/.netlify/functions/get-levels');
@@ -133,29 +47,17 @@ class LevelManager {
             
             if (allPacksResult.success && allPacksResult.data) {
                const foundPack = allPacksResult.data.find(pack => pack.id === packId);
-               if (foundPack) {
-                  console.log('Found level pack in cloud storage');
+               if (foundPack && foundPack.levels) {
+                  console.log('Found level pack in cloud storage with levels:', foundPack.levels.length);
                   
-                  // Create pack data structure
-                  const packData = {
-                     id: foundPack.id,
-                     name: foundPack.name,
-                     filename: foundPack.filename,
-                     timestamp: foundPack.timestamp,
-                     totalLevels: foundPack.totalLevels,
-                     levels: [] // Cloud packs need full level data API
-                  };
-                  
-                  this.currentLevelPack = packData;
-                  localStorage.setItem(`levelPack_${packId}`, JSON.stringify(packData));
-                  
-                  // For now, return empty array (would need separate API for full level data)
-                  console.warn('Cloud pack found but level data not implemented yet');
-                  return [];
+                  // Use the pack data directly from cloud
+                  this.currentLevelPack = foundPack;
+                  console.log('Loaded pack data:', foundPack.name, 'with', foundPack.levels.length, 'levels');
+                  return foundPack.levels;
                }
             }
          } catch (serverError) {
-            console.warn('Could not fetch from server:', serverError);
+            console.warn('Could not fetch from cloud storage:', serverError);
          }
          
          // Fallback to default levels
@@ -478,15 +380,6 @@ class LevelManager {
       ];
    }
    
-   // Save level pack to localStorage for offline use
-   saveLevelPackLocally(packData) {
-      try {
-         localStorage.setItem(`levelPack_${packData.id}`, JSON.stringify(packData));
-         console.log('Level pack saved locally:', packData.name);
-      } catch (error) {
-         console.error('Failed to save level pack locally:', error);
-      }
-   }
 }
 
 // Global level manager instance

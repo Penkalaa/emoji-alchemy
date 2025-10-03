@@ -436,37 +436,25 @@
             hideAlert();
             
             try {
-                // Load from localStorage
-                const localPacks = getLocalPacks();
-                
-                // Try to load from cloud
+                // Only load from cloud (DB) - no localStorage for custom packs
                 let cloudPacks = [];
                 try {
                     const response = await fetch('/.netlify/functions/get-levels');
                     const result = await response.json();
                     if (result.success) {
                         cloudPacks = result.data || [];
-                        
-                        // Save cloud packs to localStorage for editing
-                        cloudPacks.forEach(pack => {
-                            if (pack.levels && pack.levels.length > 0) {
-                                localStorage.setItem(`levelPack_${pack.id}`, JSON.stringify(pack));
-                                console.log(`Synced cloud pack to localStorage: ${pack.name}`);
-                            }
-                        });
+                        console.log(`Loaded ${cloudPacks.length} packs from cloud storage`);
                     }
                 } catch (error) {
                     console.warn('Could not load from cloud:', error);
+                    showAlert('⚠️ Could not connect to cloud storage. Please check your connection.', 'error');
                 }
                 
-                // Combine and deduplicate
-                const allPacks = [...localPacks, ...cloudPacks];
-                currentPacks = allPacks.filter((pack, index, self) => 
-                    index === self.findIndex(p => p.id === pack.id)
-                );
+                // Only use cloud packs - no local storage
+                currentPacks = cloudPacks;
                 
                 displayPacks();
-                showAlert(`Loaded ${currentPacks.length} level packs`, 'success');
+                showAlert(`Loaded ${currentPacks.length} level packs from cloud storage`, 'success');
                 
             } catch (error) {
                 console.error('Error loading packs:', error);
@@ -476,24 +464,6 @@
             }
         }
         
-        function getLocalPacks() {
-            const packs = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('levelPack_')) {
-                    try {
-                        const packData = JSON.parse(localStorage.getItem(key));
-                        packs.push({
-                            ...packData,
-                            source: 'local'
-                        });
-                    } catch (error) {
-                        console.warn('Invalid pack data:', key);
-                    }
-                }
-            }
-            return packs;
-        }
         
         function displayPacks() {
             const container = document.getElementById('packs');
@@ -647,24 +617,17 @@
                     filename: `${name.toLowerCase().replace(/\s+/g, '-')}-${id}.json`
                 };
                 
-                // Save to localStorage
-                localStorage.setItem(`levelPack_${id}`, JSON.stringify(newPack));
+                // Save to cloud only
+                const response = await fetch('/.netlify/functions/save-levels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newPack)
+                });
                 
-                // Try to save to cloud
-                try {
-                    const response = await fetch('/.netlify/functions/save-levels', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(newPack)
-                    });
-                    
-                    if (response.ok) {
-                        showAlert(`Imported "${name}" with ${levels.length} levels to cloud and locally!`, 'success');
-                    } else {
-                        showAlert(`Imported "${name}" with ${levels.length} levels locally (cloud unavailable)`, 'success');
-                    }
-                } catch (cloudError) {
-                    showAlert(`Imported "${name}" with ${levels.length} levels locally (cloud unavailable)`, 'success');
+                if (response.ok) {
+                    showAlert(`✅ Imported "${name}" with ${levels.length} levels to cloud storage!`, 'success');
+                } else {
+                    throw new Error(`Cloud save failed: ${response.status}`);
                 }
                 
                 hideImportModal();
@@ -726,11 +689,19 @@
             };
             
             try {
-                // Save to localStorage
-                localStorage.setItem(`levelPack_${id}`, JSON.stringify(newPack));
+                // Save to cloud only
+                const response = await fetch('/.netlify/functions/save-levels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newPack)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Cloud save failed: ${response.status}`);
+                }
                 
                 hideCreateModal();
-                showAlert(`Created pack "${name}" successfully!`, 'success');
+                showAlert(`✅ Created pack "${name}" in cloud storage!`, 'success');
                 loadPacks();
                 
                 // Open editor for this pack
@@ -889,24 +860,17 @@
             currentEditingPack.timestamp = new Date().toISOString();
             
             try {
-                // Save to localStorage
-                localStorage.setItem(`levelPack_${currentEditingPack.id}`, JSON.stringify(currentEditingPack));
+                // Save to cloud only
+                const response = await fetch('/.netlify/functions/save-levels', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentEditingPack)
+                });
                 
-                // Try to save to cloud
-                try {
-                    const response = await fetch('/.netlify/functions/save-levels', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(currentEditingPack)
-                    });
-                    
-                    if (response.ok) {
-                        showAlert(`Saved "${newName}" to cloud and locally!`, 'success');
-                    } else {
-                        showAlert(`Saved "${newName}" locally (cloud unavailable)`, 'success');
-                    }
-                } catch (cloudError) {
-                    showAlert(`Saved "${newName}" locally (cloud unavailable)`, 'success');
+                if (response.ok) {
+                    showAlert(`✅ Saved "${newName}" to cloud storage!`, 'success');
+                } else {
+                    throw new Error(`Cloud save failed: ${response.status}`);
                 }
                 
                 hideEditModal();
@@ -941,37 +905,26 @@
             }
             
             try {
-                console.log('Deleting pack:', id, pack.name);
+                console.log('Deleting pack from cloud:', id, pack.name);
                 
-                // Remove from localStorage
-                localStorage.removeItem(`levelPack_${id}`);
+                // Delete from cloud only
+                const response = await fetch(`/.netlify/functions/delete-levels?id=${id}`, {
+                    method: 'DELETE'
+                });
                 
-                // Also remove any progress data for this pack
+                if (response.ok) {
+                    console.log('Deleted from cloud storage successfully');
+                    showAlert(`🗑️ Deleted "${pack.name}" from cloud storage!`, 'success');
+                } else {
+                    throw new Error(`Cloud delete failed: ${response.status}`);
+                }
+                
+                // Also remove any progress data for this pack (keep this for game data)
                 const gameData = JSON.parse(localStorage.getItem('emojiAlchemyData') || '{}');
                 if (gameData.levelPackProgress && gameData.levelPackProgress[id]) {
                     delete gameData.levelPackProgress[id];
                     localStorage.setItem('emojiAlchemyData', JSON.stringify(gameData));
                     console.log('Removed progress data for pack');
-                }
-                
-                console.log('Removed from localStorage');
-                
-                // Try to delete from cloud (if it exists there)
-                try {
-                    const response = await fetch(`/.netlify/functions/delete-levels?id=${id}`, {
-                        method: 'DELETE'
-                    });
-                    
-                    if (response.ok) {
-                        console.log('Deleted from cloud storage');
-                        showAlert(`🗑️ Deleted "${pack.name}" from cloud and locally!`, 'success');
-                    } else {
-                        console.log('Cloud delete failed, but local delete succeeded');
-                        showAlert(`🗑️ Deleted "${pack.name}" locally (cloud unavailable)`, 'success');
-                    }
-                } catch (cloudError) {
-                    console.log('Cloud delete error:', cloudError);
-                    showAlert(`🗑️ Deleted "${pack.name}" locally (cloud unavailable)`, 'success');
                 }
                 
                 // Remove from current packs array
