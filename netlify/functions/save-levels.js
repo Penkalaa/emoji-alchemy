@@ -133,11 +133,54 @@ exports.handler = async (event, context) => {
         }
         
         if (supabaseResponse.ok) {
-          cloudSaveSuccess = true;
-          console.log(`Level pack ${isUpdate ? 'updated' : 'saved'} to Supabase successfully`);
+          const responseText = await supabaseResponse.text();
+          console.log(`Supabase response body for ${isUpdate ? 'update' : 'create'}:`, responseText);
+          
+          if (isUpdate) {
+            // For updates, check if any rows were affected
+            const updatedRecords = responseText ? JSON.parse(responseText) : [];
+            
+            if (updatedRecords.length > 0) {
+              cloudSaveSuccess = true;
+              console.log('Level pack updated in Supabase successfully');
+              console.log('Updated records:', responseText);
+            } else {
+              console.warn('Supabase update returned 200 but no records were updated!');
+              console.warn('This usually means RLS (Row Level Security) is blocking the update');
+              
+              return {
+                statusCode: 403,
+                headers,
+                body: JSON.stringify({
+                  success: false,
+                  error: 'Update blocked - possibly due to Row Level Security (RLS)',
+                  details: 'Record exists but could not be updated. Check Supabase RLS policies.',
+                  packId: packId,
+                  isUpdate: true,
+                  responseBody: responseText
+                })
+              };
+            }
+          } else {
+            // For creates, any 200 response is success
+            cloudSaveSuccess = true;
+            console.log('Level pack created in Supabase successfully');
+          }
         } else {
           const errorText = await supabaseResponse.text();
           console.warn(`Supabase ${isUpdate ? 'update' : 'save'} failed:`, errorText);
+          
+          return {
+            statusCode: supabaseResponse.status,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              error: `Supabase ${isUpdate ? 'update' : 'save'} failed: ${supabaseResponse.status}`,
+              details: errorText,
+              packId: packId,
+              isUpdate: isUpdate
+            })
+          };
         }
       } else {
         console.log('Supabase credentials not configured, skipping cloud save');
