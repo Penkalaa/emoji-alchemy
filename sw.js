@@ -1,5 +1,5 @@
-// Auto-generate cache version based on timestamp (cache busting)
-const CACHE_VERSION = `v${Date.now()}`; // Dynamic version for each deploy
+// Static cache version - only update when needed
+const CACHE_VERSION = 'v2025-01-03-stable'; // Manual version control
 const CACHE_NAME = `emoji-alchemy-${CACHE_VERSION}`;
 const urlsToCache = [
   '/',
@@ -29,43 +29,39 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Always network first for app files (HTML, JS, functions)
+  // Network first for app files, but allow normal caching
   if (event.request.mode === 'navigate' || 
       url.pathname.endsWith('.html') ||
-      url.pathname.endsWith('.js') ||
       url.pathname.includes('/functions/') ||
       url.pathname.includes('/admin')) {
     
-    console.log('SW: Network first for:', url.pathname);
-    
     event.respondWith(
-      fetch(event.request, {
-        cache: 'no-cache', // Force fresh fetch
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        }
-      })
+      fetch(event.request)
         .then((response) => {
-          console.log('SW: Fresh fetch successful for:', url.pathname);
-          // Don't cache HTML/JS files to ensure freshness
+          // Cache successful responses
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseClone);
+              });
+          }
           return response;
         })
-        .catch((error) => {
-          console.log('SW: Network failed, trying cache for:', url.pathname);
-          // Fallback to cache only if network completely fails
+        .catch(() => {
+          // Fallback to cache if network fails
           return caches.match(event.request);
         })
     );
   } 
-  // Cache first only for external assets (CDN, images, etc.)
+  // Cache first for static assets (JS, CSS, images, etc.)
   else {
     event.respondWith(
       caches.match(event.request)
         .then((response) => {
           return response || fetch(event.request)
             .then((fetchResponse) => {
-              // Cache external assets
+              // Cache static assets
               if (fetchResponse.status === 200) {
                 const responseClone = fetchResponse.clone();
                 caches.open(CACHE_NAME)
