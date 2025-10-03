@@ -14,7 +14,7 @@ class LevelManager {
          // Then try to fetch from server
          let serverPacks = [];
          try {
-            const response = await fetch('/netlify/functions/get-levels');
+            const response = await fetch('/.netlify/functions/get-levels');
             const result = await response.json();
             
             if (result.success) {
@@ -126,7 +126,7 @@ class LevelManager {
          // Try to fetch from server
          try {
             console.log('Trying to fetch from server:', packId);
-            const response = await fetch(`/netlify/functions/get-levels?id=${packId}`);
+            const response = await fetch(`/.netlify/functions/get-levels?id=${packId}`);
             const result = await response.json();
             
             if (result.success && result.data) {

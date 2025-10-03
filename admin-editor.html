@@ -921,7 +921,26 @@
             try {
                 showAlert('Loading from cloud...', 'info', 'exportStatus');
                 
-                const response = await fetch('/netlify/functions/get-levels');
+                // Try different Netlify function paths
+                const possiblePaths = [
+                    '/.netlify/functions/get-levels',
+                    '/netlify/functions/get-levels'
+                ];
+                
+                let response = null;
+                for (const path of possiblePaths) {
+                    try {
+                        console.log('Trying GET path:', path);
+                        response = await fetch(path);
+                        if (response.ok) break;
+                    } catch (e) {
+                        console.warn(`GET path ${path} failed:`, e);
+                    }
+                }
+                
+                if (!response || !response.ok) {
+                    throw new Error('All GET paths failed');
+                }
                 const result = await response.json();
                 
                 if (result.success && result.data.length > 0) {
