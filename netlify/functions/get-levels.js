@@ -27,46 +27,21 @@ exports.handler = async (event, context) => {
 
   try {
     // In a real implementation, you would fetch from a database
-    // For now, we'll simulate finding saved level packs
+    // For now, we return empty array since level packs are stored in localStorage
     
-    // This would normally query a database, but for demo purposes
-    // we'll return some sample data that matches what might be saved
+    // This would normally query a database and return saved level packs
+    // Currently, all level packs are managed via localStorage in the client
     const savedLevels = [];
-    
-    // Check if there are any indicators of saved levels
-    // In a real app, this would query your database
-    const currentTime = new Date().toISOString();
-    const todayTimestamp = currentTime.slice(0, 10).replace(/-/g, '');
-    
-    // Generate some realistic sample data based on current time
-    const sampleLevels = [
-      {
-        id: `${todayTimestamp}120000`,
-        filename: `custom-levels-${todayTimestamp}120000.json`,
-        name: "custom-levels",
-        timestamp: `${currentTime.slice(0, 10)}T12:00:00.000Z`,
-        totalLevels: 25,
-        preview: ["🎨 + 🖌️ = 🖼️", "🌱 + 🌞 = 🌻", "🪨 + 🔥 = 🌋"]
-      },
-      {
-        id: `${todayTimestamp}140000`,
-        filename: `my-levels-${todayTimestamp}140000.json`,
-        name: "my-levels", 
-        timestamp: `${currentTime.slice(0, 10)}T14:00:00.000Z`,
-        totalLevels: 15,
-        preview: ["🔋 + 📱 = 🔌", "🌊 + 🏄 = 🏖️", "🎯 + 🏹 = 🎪"]
-      }
-    ];
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        message: 'Levels retrieved successfully!',
-        data: sampleLevels,
-        total: sampleLevels.length,
-        note: 'In production, this would fetch from a real database. Level packs are currently stored in localStorage.'
+        message: 'No server-side level packs found. Using localStorage for level management.',
+        data: savedLevels,
+        total: savedLevels.length,
+        note: 'Level packs are currently stored in localStorage. In production, this would fetch from a real database.'
       })
     };
 

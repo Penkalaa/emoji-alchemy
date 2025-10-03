@@ -478,7 +478,7 @@ const levelManager = new LevelManager();
 
 // Backward compatibility - GAME_DATA will be populated dynamically
 const GAME_DATA = {
-   levels: levelManager.getDefaultLevels()
+   levels: [] // Will be populated by LevelManager
 }
 
 // Sound Manager
@@ -679,38 +679,38 @@ class EmojiAlchemyGame {
 
    async init() {
       try {
-         // Get device pixel ratio for high-DPI screens
-         const pixelRatio = window.devicePixelRatio || 1
-         
-         // Use fixed dimensions to prevent loops
-         const gameWidth = 400
-         const gameHeight = 700
+      // Get device pixel ratio for high-DPI screens
+      const pixelRatio = window.devicePixelRatio || 1
+      
+      // Use fixed dimensions to prevent loops
+      const gameWidth = 400
+      const gameHeight = 700
          
          // Check if canvas element exists
          const canvas = document.getElementById("gameCanvas")
          if (!canvas) {
             throw new Error("Game canvas element not found")
          }
-         
-         // Create high-resolution canvas
-         this.app = new PIXI.Application({
-            width: gameWidth,
-            height: gameHeight,
-            backgroundColor: 0x1a1a2e,
+      
+      // Create high-resolution canvas
+      this.app = new PIXI.Application({
+         width: gameWidth,
+         height: gameHeight,
+         backgroundColor: 0x1a1a2e,
             view: canvas,
-            antialias: true,
-            resolution: pixelRatio,
-            autoDensity: true,
+         antialias: true,
+         resolution: pixelRatio,
+         autoDensity: true,
             resizeTo: canvas, // Auto-resize to canvas
-         })
+      })
 
-         // Store dimensions for positioning
-         this.gameWidth = gameWidth
-         this.gameHeight = gameHeight
-         this.pixelRatio = pixelRatio
+      // Store dimensions for positioning
+      this.gameWidth = gameWidth
+      this.gameHeight = gameHeight
+      this.pixelRatio = pixelRatio
 
-         this.app.stage.eventMode = "static"
-         this.app.stage.hitArea = new PIXI.Rectangle(0, 0, gameWidth, gameHeight)
+      this.app.stage.eventMode = "static"
+      this.app.stage.hitArea = new PIXI.Rectangle(0, 0, gameWidth, gameHeight)
 
          // Add global click debug
          this.app.stage.on('pointerdown', (event) => {
@@ -723,9 +723,14 @@ class EmojiAlchemyGame {
 
          // Setup responsive handling
          this.setupResponsiveHandling()
+
+      this.setupKeyboardShortcuts()
+      this.setupGame()
          
-         this.setupKeyboardShortcuts()
-         this.setupGame()
+         // Initialize GAME_DATA with default levels
+         if (!GAME_DATA.levels || GAME_DATA.levels.length === 0) {
+            GAME_DATA.levels = this.levelManager.getDefaultLevels()
+         }
          
          // Load available level packs and show selector
          this.showLevelPackSelector()
@@ -891,28 +896,28 @@ class EmojiAlchemyGame {
    showQuickFeedback(message, color) {
       try {
          if (this.quickFeedback && this.app && this.app.stage) {
-            this.app.stage.removeChild(this.quickFeedback)
-         }
+         this.app.stage.removeChild(this.quickFeedback)
+      }
 
          if (!this.app || !this.app.stage) return
 
-         this.quickFeedback = new PIXI.Text(message, {
-            fontFamily: "Arial",
-            fontSize: 16,
-            fill: color,
-            align: "center",
-         })
-         this.quickFeedback.anchor.set(0.5)
-         this.quickFeedback.x = this.gameWidth / 2
-         this.quickFeedback.y = 20
-         this.app.stage.addChild(this.quickFeedback)
+      this.quickFeedback = new PIXI.Text(message, {
+         fontFamily: "Arial",
+         fontSize: 16,
+         fill: color,
+         align: "center",
+      })
+      this.quickFeedback.anchor.set(0.5)
+      this.quickFeedback.x = this.gameWidth / 2
+      this.quickFeedback.y = 20
+      this.app.stage.addChild(this.quickFeedback)
 
-         setTimeout(() => {
+      setTimeout(() => {
             if (this.quickFeedback && this.app && this.app.stage) {
-               this.app.stage.removeChild(this.quickFeedback)
-               this.quickFeedback = null
-            }
-         }, 1500)
+            this.app.stage.removeChild(this.quickFeedback)
+            this.quickFeedback = null
+         }
+      }, 1500)
       } catch (error) {
          console.error("Error showing quick feedback:", error)
       }
@@ -947,35 +952,35 @@ class EmojiAlchemyGame {
 
    setupGame() {
       try {
-         // Background
-         const background = new PIXI.Graphics()
-         background.beginFill(0x16213e)
-         background.drawRoundedRect(0, 0, this.gameWidth, this.gameHeight, 20)
-         background.endFill()
-         this.app.stage.addChild(background)
+      // Background
+      const background = new PIXI.Graphics()
+      background.beginFill(0x16213e)
+      background.drawRoundedRect(0, 0, this.gameWidth, this.gameHeight, 20)
+      background.endFill()
+      this.app.stage.addChild(background)
 
-         // Title
-         const titleText = new PIXI.Text("Emoji Alchemy", {
-            fontFamily: "Arial",
-            fontSize: 24,
-            fill: 0xf1c40f,
-            align: "center",
-         })
-         titleText.anchor.set(0.5)
-         titleText.x = this.gameWidth / 2
-         titleText.y = 50
-         this.app.stage.addChild(titleText)
+      // Title
+      const titleText = new PIXI.Text("Emoji Alchemy", {
+         fontFamily: "Arial",
+         fontSize: 24,
+         fill: 0xf1c40f,
+         align: "center",
+      })
+      titleText.anchor.set(0.5)
+      titleText.x = this.gameWidth / 2
+      titleText.y = 50
+      this.app.stage.addChild(titleText)
 
          // Score and High Score
-         this.scoreText = new PIXI.Text(`Score: ${this.score}`, {
-            fontFamily: "Arial",
-            fontSize: 18,
-            fill: 0xf1c40f,
-            align: "left",
-         })
-         this.scoreText.x = 20
-         this.scoreText.y = 80
-         this.app.stage.addChild(this.scoreText)
+      this.scoreText = new PIXI.Text(`Score: ${this.score}`, {
+         fontFamily: "Arial",
+         fontSize: 18,
+         fill: 0xf1c40f,
+         align: "left",
+      })
+      this.scoreText.x = 20
+      this.scoreText.y = 80
+      this.app.stage.addChild(this.scoreText)
          
          // High Score
          this.highScoreText = new PIXI.Text(`Best: ${this.gameData.highScore}`, {
@@ -1084,7 +1089,7 @@ class EmojiAlchemyGame {
    clearLevelElements() {
       try {
          // Clean up input emojis
-         if (this.inputEmojis) {
+      if (this.inputEmojis) {
             this.inputEmojis.forEach(sprite => {
                if (sprite && sprite.parent) {
                   sprite.parent.removeChild(sprite)
@@ -1092,36 +1097,36 @@ class EmojiAlchemyGame {
                   if (sprite.destroy) sprite.destroy()
                }
             })
-            this.inputEmojis = []
-         }
+         this.inputEmojis = []
+      }
          
          // Clean up answer options
-         if (this.answerOptions) {
+      if (this.answerOptions) {
             this.answerOptions.forEach(option => {
                if (option && option.parent) {
                   option.parent.removeChild(option)
                   if (option.destroy) option.destroy()
                }
             })
-            this.answerOptions = []
-         }
+         this.answerOptions = []
+      }
          
          // Clean up feedback text
-         if (this.feedbackText) {
+      if (this.feedbackText) {
             if (this.feedbackText.parent) {
                this.feedbackText.parent.removeChild(this.feedbackText)
             }
             if (this.feedbackText.destroy) this.feedbackText.destroy()
-            this.feedbackText = null
-         }
+         this.feedbackText = null
+      }
          
          // Clean up next button
-         if (this.nextButton) {
+      if (this.nextButton) {
             if (this.nextButton.parent) {
                this.nextButton.parent.removeChild(this.nextButton)
             }
             if (this.nextButton.destroy) this.nextButton.destroy()
-            this.nextButton = null
+         this.nextButton = null
          }
          
          // Force garbage collection hint
@@ -1498,25 +1503,25 @@ class EmojiAlchemyGame {
          buttonGraphics.drawRoundedRect(-75, -25, 150, 50, 12)
          buttonGraphics.endFill()
 
-         const buttonText = new PIXI.Text("Next Level", {
-            fontFamily: "Arial",
+      const buttonText = new PIXI.Text("Next Level", {
+         fontFamily: "Arial",
             fontSize: 18,
-            fill: 0xffffff,
-            align: "center",
-         })
-         buttonText.anchor.set(0.5)
+         fill: 0xffffff,
+         align: "center",
+      })
+      buttonText.anchor.set(0.5)
 
          // Add graphics and text to container
          this.nextButton.addChild(buttonGraphics)
-         this.nextButton.addChild(buttonText)
+      this.nextButton.addChild(buttonText)
          
          // Position the container
-         this.nextButton.x = this.gameWidth / 2
+      this.nextButton.x = this.gameWidth / 2
          this.nextButton.y = this.gameHeight - 80  // Move up a bit more
          
          // Make the entire container interactive
-         this.nextButton.eventMode = "static"
-         this.nextButton.cursor = "pointer"
+      this.nextButton.eventMode = "static"
+      this.nextButton.cursor = "pointer"
          this.nextButton.hitArea = new PIXI.Rectangle(-85, -35, 170, 70)
 
          console.log(`Button positioned at: (${this.nextButton.x}, ${this.nextButton.y})`)
@@ -1554,8 +1559,8 @@ class EmojiAlchemyGame {
             // Add small delay for visual feedback
             setTimeout(() => {
                console.log(`Moving from level ${this.currentLevel} to ${this.currentLevel + 1}`)
-               this.currentLevel++
-               this.loadLevel(this.currentLevel)
+         this.currentLevel++
+         this.loadLevel(this.currentLevel)
             }, 150)
          })
 
@@ -1569,7 +1574,7 @@ class EmojiAlchemyGame {
          })
 
          // Add to stage
-         this.app.stage.addChild(this.nextButton)
+      this.app.stage.addChild(this.nextButton)
          
          // Ensure button is on top
          this.app.stage.setChildIndex(this.nextButton, this.app.stage.children.length - 1)
@@ -1709,14 +1714,14 @@ class EmojiAlchemyGame {
          this.hapticManager.light()
          
          setTimeout(() => {
-            this.currentLevel = 0
-            this.score = 0
+         this.currentLevel = 0
+         this.score = 0
             this.gameData.currentLevel = 0
             this.gameData.totalScore = 0
             this.saveGameData()
-            this.app.stage.removeChildren()
-            this.setupGame()
-            this.loadLevel(this.currentLevel)
+         this.app.stage.removeChildren()
+         this.setupGame()
+         this.loadLevel(this.currentLevel)
          }, 100)
       })
 
@@ -1912,7 +1917,12 @@ class EmojiAlchemyGame {
             GAME_DATA.levels = this.levelManager.getDefaultLevels()
          } else {
             const levels = await this.levelManager.loadLevelPack(packId)
-            GAME_DATA.levels = levels
+            GAME_DATA.levels = levels || this.levelManager.getDefaultLevels()
+         }
+         
+         // Ensure we have levels
+         if (!GAME_DATA.levels || GAME_DATA.levels.length === 0) {
+            GAME_DATA.levels = this.levelManager.getDefaultLevels()
          }
          
          console.log(`Loaded ${GAME_DATA.levels.length} levels`)
@@ -2077,7 +2087,8 @@ class EmojiAlchemyGame {
       this.settingsPanel.addChild(packInfo)
       yPos += 30
       
-      const levelInfo = new PIXI.Text(`📊 ${GAME_DATA.levels.length} levels available`, {
+      const levelCount = GAME_DATA.levels ? GAME_DATA.levels.length : 0
+      const levelInfo = new PIXI.Text(`📊 ${levelCount} levels available`, {
          fontFamily: 'Arial',
          fontSize: 12,
          fill: 0xbdc3c7,
